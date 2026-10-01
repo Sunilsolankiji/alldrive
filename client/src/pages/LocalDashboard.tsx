@@ -12,6 +12,7 @@ import LocalUploadModal from '../components/LocalUploadModal'
 import PhotosView from '../components/PhotosView'
 import { fileKey } from '../hooks/usePagedDriveFiles'
 import type { DriveAccount, DriveFile, LocalDriveAccount } from '../types'
+import { username } from '../utils/username'
 
 const toDisplayDrive = (d: LocalDriveAccount): DriveAccount => ({
   _id: d.id,
@@ -61,7 +62,7 @@ const LocalDashboard = () => {
   const [search, setSearch] = useState<Record<Tab, string>>({ photos: '', files: '' })
   const [type, setType] = useState<Record<Tab, string>>({ photos: '', files: '' })
   const [deleted, setDeleted] = useState<Set<string>>(new Set())
-  const [confirmTrash, setConfirmTrash] = useState<{ message: string; resolve: (ok: boolean) => void } | null>(null)
+  const [confirmTrash, setConfirmTrash] = useState<{ message: ReactNode; resolve: (ok: boolean) => void } | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [showUpload, setShowUpload] = useState(false)
   const [previewFile, setPreviewFile] = useState<DriveFile | null>(null)
@@ -114,9 +115,17 @@ const LocalDashboard = () => {
 
   const deleteFiles = async (list: DriveFile[]) => {
     if (!list.length) return false
-    const what = list.length === 1 ? `"${list[0].name}"` : `${list.length} items`
+    const what = list.length === 1 ? list[0].name : `${list.length} items`
     const ok = await new Promise<boolean>((resolve) =>
-      setConfirmTrash({ message: `${what} will be moved to Google Drive trash. You can restore it from there for 30 days.`, resolve })
+      setConfirmTrash({
+        message: (
+          <>
+            <strong className="font-semibold text-gray-900">{what}</strong> will be moved to Google Drive trash. You can
+            restore {list.length === 1 ? 'it' : 'them'} from there for 30 days.
+          </>
+        ),
+        resolve,
+      })
     )
     if (!ok) return false
     const results = await Promise.allSettled(
@@ -239,7 +248,7 @@ const LocalDashboard = () => {
                 {expiredDrives.map((d) => (
                   <div key={d.id} className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
                     <p className="text-sm text-amber-800">
-                      Session for <span className="font-semibold">{d.accountEmail}</span> expired. Its files are hidden until you reconnect.
+                      Session for <span className="font-semibold" title={d.accountEmail}>{username(d.accountEmail)}</span> expired. Its files are hidden until you reconnect.
                     </p>
                     <button
                       onClick={() => reconnect(d.accountEmail)}

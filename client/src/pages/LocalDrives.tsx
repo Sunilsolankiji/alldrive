@@ -1,11 +1,16 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocalDrives } from '../context/LocalDriveContext'
 import { startGoogleConnect } from '../api/localDrive'
 import Navbar from '../components/Navbar'
+import { username } from '../utils/username'
+import Avatar from '../components/Avatar'
+import ConfirmDialog from '../components/ConfirmDialog'
+import type { LocalDriveAccount } from '../types'
 
 const LocalDrives = () => {
   const { drives, removeDrive } = useLocalDrives()
   const [connecting, setConnecting] = useState(false)
+  const [pendingDisconnect, setPendingDisconnect] = useState<LocalDriveAccount | null>(null)
 
   // Reset connecting state if user navigates back (bfcache restore)
   useEffect(() => {
@@ -73,20 +78,14 @@ const LocalDrives = () => {
                 className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
               >
                 <div className="flex items-center gap-4 min-w-0">
-                  {drive.profilePicture ? (
-                    <img src={drive.profilePicture} alt={drive.accountName} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
-                  ) : (
-                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-blue-600 font-semibold text-lg">{drive.accountEmail.charAt(0).toUpperCase()}</span>
-                    </div>
-                  )}
+                  <Avatar src={drive.profilePicture} email={drive.accountEmail} className="h-12 w-12 text-lg" />
                   <div className="min-w-0">
-                    <p className="font-semibold text-gray-900 truncate">{drive.accountName}</p>
+                    <p className="font-semibold text-gray-900 truncate">{username(drive.accountEmail)}</p>
                     <p className="text-sm text-gray-500 truncate">{drive.accountEmail}</p>
                   </div>
                 </div>
                 <button
-                  onClick={() => { if (confirm('Disconnect this drive?')) removeDrive(drive.id) }}
+                  onClick={() => setPendingDisconnect(drive)}
                   className="flex-shrink-0 rounded-lg px-3 py-1.5 text-sm text-red-500 transition-colors hover:bg-red-50 hover:text-red-700"
                 >
                   Disconnect
@@ -102,6 +101,23 @@ const LocalDrives = () => {
           </p>
         </div>
       </div>
+      {pendingDisconnect && (
+        <ConfirmDialog
+          title="Disconnect drive?"
+          message={
+            <>
+              <strong className="font-semibold text-gray-900">{pendingDisconnect.accountEmail}</strong> will be removed from this
+              browser. Files in Google Drive are not affected.
+            </>
+          }
+          confirmLabel="Disconnect"
+          danger
+          onResult={(ok) => {
+            if (ok) removeDrive(pendingDisconnect.id)
+            setPendingDisconnect(null)
+          }}
+        />
+      )}
     </div>
   )
 }

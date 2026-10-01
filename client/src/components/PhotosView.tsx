@@ -4,7 +4,7 @@ import { fileKey, usePagedDriveFiles } from '../hooks/usePagedDriveFiles'
 import type { DriveFile, LocalDriveAccount } from '../types'
 import { aspectRatio, isVideo, justify, takenAt } from '../utils/photoLayout'
 import LoadMoreSentinel from './LoadMoreSentinel'
-import PhotoViewer, { ICONS, Icon } from './PhotoViewer'
+import PhotoViewer, { ICONS, Icon, preloadFull } from './PhotoViewer'
 
 interface Props {
   drives: LocalDriveAccount[]
@@ -216,6 +216,9 @@ const PhotosView = ({ drives, search, typeFilter, hidden, reloadKey, onDelete }:
                           <button
                             type="button"
                             onClick={() => (selecting ? toggle(file) : setViewerIndex(index))}
+                            // ponytail: one cache-warm request per hovered photo; cheap thumbnail-CDN hits, no throttling.
+                            onPointerEnter={() => !selecting && preloadFull(file)}
+                            onFocus={() => !selecting && preloadFull(file)}
                             className="absolute inset-0 h-full w-full focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-600"
                             aria-label={`${selecting ? 'Select' : 'Open'} ${file.name}`}
                           >

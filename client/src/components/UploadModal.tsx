@@ -1,6 +1,7 @@
 import { useRef, useState, type DragEvent } from 'react'
 import type { DriveAccount } from '../types'
 import { uploadFile } from '../api/files'
+import { username } from '../utils/username'
 
 interface Props {
   drives: DriveAccount[]
@@ -65,7 +66,7 @@ const UploadModal = ({ drives, onClose, onUploaded }: Props) => {
             >
               {drives.map((d) => (
                 <option key={d._id} value={d._id}>
-                  {d.accountName || d.accountEmail}
+                  {username(d.accountEmail)}
                 </option>
               ))}
             </select>

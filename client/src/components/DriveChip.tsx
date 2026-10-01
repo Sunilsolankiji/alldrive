@@ -1,4 +1,6 @@
 import type { DriveAccount } from '../types'
+import Avatar from './Avatar'
+import { username } from '../utils/username'
 
 interface Props {
   drives: DriveAccount[]
@@ -28,10 +30,8 @@ const DriveChip = ({ drives, selectedDriveId, onSelect }: Props) => (
             : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400'
         }`}
       >
-        {drive.profilePicture && (
-          <img src={drive.profilePicture} alt="" className="h-4 w-4 rounded-full" />
-        )}
-        <span className="max-w-44 truncate">{drive.accountName || drive.accountEmail}</span>
+        <Avatar src={drive.profilePicture} email={drive.accountEmail} className="h-5 w-5 text-[10px]" />
+        <span className="max-w-44 truncate" title={drive.accountEmail}>{username(drive.accountEmail)}</span>
       </button>
     ))}
   </div>

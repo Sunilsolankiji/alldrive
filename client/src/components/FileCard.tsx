@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { DriveFile } from '../types'
 import { getDownloadUrl } from '../api/files'
+import { username } from '../utils/username'
+import Avatar from './Avatar'
 
 interface Props {
   file: DriveFile
@@ -78,8 +80,9 @@ const FileCard = ({ file, onPreview, onDelete, onOpenFolder }: Props) => {
           <span className="rounded bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">
             {isFolder ? 'Folder' : formatSize(file.size) || 'File'}
           </span>
-          <span className="max-w-[110px] truncate text-xs text-gray-500" title={file.driveEmail}>
-            {file.driveName || file.driveEmail}
+          <span className="flex min-w-0 items-center gap-1.5 text-xs text-gray-500" title={file.driveEmail}>
+            <Avatar src={file.driveProfilePicture} email={file.driveEmail} className="h-4 w-4 text-[9px]" />
+            <span className="max-w-[110px] truncate">{username(file.driveEmail)}</span>
           </span>
         </div>
       </div>

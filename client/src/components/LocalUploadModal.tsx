@@ -1,6 +1,7 @@
-﻿import { useRef, useState, type DragEvent } from 'react'
+import { useRef, useState, type DragEvent } from 'react'
 import type { LocalDriveAccount } from '../types'
 import * as localDriveApi from '../api/localDrive'
+import { username } from '../utils/username'
 
 interface Props {
   drives: LocalDriveAccount[]
@@ -53,7 +54,7 @@ const LocalUploadModal = ({ drives, onClose, onUploaded }: Props) => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {drives.map((d) => (
-                <option key={d.id} value={d.id}>{d.accountName || d.accountEmail}</option>
+                <option key={d.id} value={d.id}>{username(d.accountEmail)}</option>
               ))}
             </select>
           </div>

@@ -3,6 +3,7 @@ import * as localDriveApi from '../api/localDrive'
 import { fileKey } from '../hooks/usePagedDriveFiles'
 import type { DriveFile, LocalDriveAccount } from '../types'
 import { formatSize, isVideo, takenAt } from '../utils/photoLayout'
+import { username } from '../utils/username'
 
 // Material Design icon paths (Apache 2.0)
 export const ICONS = {
@@ -41,6 +42,14 @@ interface Props {
 const viewportPx = () =>
   Math.min(4096, Math.round(Math.max(window.innerWidth, window.innerHeight) * devicePixelRatio))
 const thumb = (f: DriveFile, size: string) => (f.thumbnailLink ? localDriveApi.sizedThumbnail(f.thumbnailLink, size) : '')
+
+/** Warms the browser cache with the viewer-size image, so opening/sliding to it shows full resolution at once. */
+export const preloadFull = (f?: DriveFile) => {
+  if (!f || needsOriginal(f)) return
+  const img = new Image()
+  img.referrerPolicy = 'no-referrer' // must match the <img>, or Google's CDN may refuse and nothing gets cached
+  img.src = thumb(f, `s${viewportPx()}`)
+}
 const needsOriginal = (f: DriveFile) => isVideo(f) || !f.thumbnailLink
 
 const barButton = 'rounded-full p-2.5 text-white/90 hover:bg-white/10 hover:text-white disabled:opacity-40'
@@ -139,10 +148,8 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
 
   // Warm the cache for the neighbours so arrowing through is instant.
   useEffect(() => {
-    const px = viewportPx()
-    ;[files[index - 1], files[index + 1]].forEach((f) => {
-      if (f && !needsOriginal(f)) new Image().src = thumb(f, `s${px}`)
-    })
+    preloadFull(files[index - 1])
+    preloadFull(files[index + 1])
   }, [files, index])
 
   useEffect(() => {
@@ -311,11 +318,18 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
               {full ? (
                 <img
                   key={full}
+                  // Already cached (preloaded neighbour/hover): show it in this same frame, no low-res stage.
+                  ref={(el) => {
+                    if (el?.complete && el.naturalWidth && loadedSrc !== full) setLoadedSrc(full)
+                  }}
                   src={full}
                   alt={file.name}
                   referrerPolicy="no-referrer"
-                  onLoad={() => setLoadedSrc(full)}
-                  className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-200 ${loadedSrc === full ? 'opacity-100' : 'opacity-0'}`}
+                  // Swap only once decoded, so the placeholder is never removed before pixels are ready.
+                  onLoad={(e) => {
+                    e.currentTarget.decode().catch(() => {}).finally(() => setLoadedSrc(full))
+                  }}
+                  className={`absolute inset-0 h-full w-full object-contain ${loadedSrc === full ? '' : 'opacity-0'}`}
                   draggable={false}
                 />
               ) : (
@@ -398,7 +412,7 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
             {file.driveEmail && (
               <div>
                 <dt className="text-xs uppercase tracking-wide text-gray-500">Account</dt>
-                <dd className="break-all">{file.driveEmail}</dd>
+                <dd className="break-all" title={file.driveEmail}>{username(file.driveEmail)}</dd>
               </div>
             )}
           </dl>

@@ -1,5 +1,6 @@
 import type { DriveFile } from '../types'
 import { getDownloadUrl, getPreviewUrl } from '../api/files'
+import { username } from '../utils/username'
 
 interface Props {
   file: DriveFile
@@ -48,7 +49,7 @@ const FilePreviewModal = ({ file, onClose, overridePreviewUrl, loading, onDelete
       >
         <div className="flex items-center gap-3 min-w-0">
           <span className="text-white font-medium truncate">{file.name}</span>
-          <span className="text-gray-400 text-sm shrink-0">{file.driveEmail}</span>
+          <span className="text-gray-400 text-sm shrink-0" title={file.driveEmail}>{username(file.driveEmail)}</span>
         </div>
         <div className="flex items-center gap-2 ml-4">
           <a
