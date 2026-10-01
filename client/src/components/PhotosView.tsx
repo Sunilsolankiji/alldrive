@@ -272,13 +272,13 @@ const PhotosView = ({ drives, search, typeFilter, hidden, reloadKey, onDelete }:
                     onClick={() => toggleGroup(keys)}
                     className={`absolute left-0 flex h-5 w-5 items-center justify-center border-2 rounded-full transition-[opacity,transform] duration-200 ${
                       allSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-400 text-transparent'
-                    } ${selecting ? 'translate-x-0' : '-translate-x-1 opacity-0 group-hover/day:translate-x-0 group-hover/day:opacity-100 focus-visible:translate-x-0 focus-visible:opacity-100'}`}
+                    } ${selecting ? 'translate-x-0' : '-translate-x-1 opacity-0 group-hover/day:translate-x-0 group-hover/day:opacity-100 focus-visible:translate-x-0 focus-visible:opacity-100 pointer-coarse:translate-x-0 pointer-coarse:opacity-100'}`}
                   >
                     <Icon path={ICONS.check} className="h-3.5 w-3.5" />
                   </button>
                 )}
                 <h3 className={`text-sm font-medium text-gray-800 ${canSelectGroup ? 'transition-transform duration-200' : ''} ${
-                  canSelectGroup && (selecting ? 'translate-x-7' : 'group-hover/day:translate-x-7 focus-within:translate-x-7')
+                  canSelectGroup && (selecting ? 'translate-x-7' : 'group-hover/day:translate-x-7 focus-within:translate-x-7 pointer-coarse:translate-x-7')
                 }`}>
                   {g.label}
                 </h3>
@@ -333,8 +333,9 @@ const PhotosView = ({ drives, search, typeFilter, hidden, reloadKey, onDelete }:
                             aria-checked={isSel}
                             aria-label={`Select ${file.name}`}
                             onClick={() => toggle(file)}
-                            className={`absolute left-2 top-2 transition-opacity ${
-                              isSel || selecting ? '' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+                            // p-2 keeps the icon where it was but gives fingers a bigger target; touch screens have no hover, so it stays visible
+                            className={`absolute left-0 top-0 p-2 transition-opacity ${
+                              isSel || selecting ? '' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100'
                             }`}
                           >
                             <CheckCircle checked={isSel} className="h-5 w-5" />

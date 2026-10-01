@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useLocalDrives } from '../context/LocalDriveContext'
 import { useUploads } from '../context/UploadContext'
 import * as localDriveApi from '../api/localDrive'
+import { isNativeApp } from '../api/photoBackup'
 import ConfirmDialog from '../components/ConfirmDialog'
 import DriveChip from '../components/DriveChip'
 import { FOLDER_MIME } from '../components/FileCard'
@@ -105,6 +106,8 @@ const LocalDashboard = () => {
     setReconnecting(email)
     try {
       await localDriveApi.startGoogleConnect(email)
+      // The Android app signs in inside an in-app browser tab; this page stays mounted
+      if (isNativeApp) setReconnecting(null)
     } catch {
       setReconnecting(null)
       alert('Could not start sign-in. Is the server running?')

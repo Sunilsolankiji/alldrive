@@ -19,7 +19,8 @@ const app = express()
 
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    // https://localhost is the Android app's (Capacitor) WebView origin
+    origin: [process.env.CLIENT_URL || 'http://localhost:5173', 'https://localhost'],
     credentials: true,
   })
 )

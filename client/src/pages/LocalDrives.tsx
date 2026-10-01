@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocalDrives } from '../context/LocalDriveContext'
 import { startGoogleConnect } from '../api/localDrive'
+import { isNativeApp } from '../api/photoBackup'
 import Navbar from '../components/Navbar'
 import { username } from '../utils/username'
 import Avatar from '../components/Avatar'
@@ -8,8 +9,9 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import type { LocalDriveAccount } from '../types'
 
 const LocalDrives = () => {
-  const { drives, removeDrive } = useLocalDrives()
+  const { drives, removeDrive, connectError, clearConnectError } = useLocalDrives()
   const [connecting, setConnecting] = useState(false)
+  const [startError, setStartError] = useState('')
   const [pendingDisconnect, setPendingDisconnect] = useState<LocalDriveAccount | null>(null)
 
   // Reset connecting state if user navigates back (bfcache restore)
@@ -21,12 +23,18 @@ const LocalDrives = () => {
 
   const handleConnect = async () => {
     setConnecting(true)
+    setStartError('')
+    clearConnectError()
     try {
       await startGoogleConnect()
-    } catch {
+      // The Android app signs in inside an in-app browser tab; this page stays mounted
+      if (isNativeApp) setConnecting(false)
+    } catch (err) {
       setConnecting(false)
+      if (isNativeApp) setStartError((err as Error).message || 'Could not start Google sign-in.')
     }
   }
+  const error = startError || connectError
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-gray-100">
@@ -54,6 +62,12 @@ const LocalDrives = () => {
             )}
           </button>
         </div>
+
+        {error && (
+          <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
         {drives.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center shadow-sm">
@@ -86,7 +100,7 @@ const LocalDrives = () => {
                 </div>
                 <button
                   onClick={() => setPendingDisconnect(drive)}
-                  className="flex-shrink-0 rounded-lg px-3 py-1.5 text-sm text-red-500 transition-colors hover:bg-red-50 hover:text-red-700"
+                  className="flex min-h-11 flex-shrink-0 items-center rounded-lg px-3 text-sm text-red-600 transition-colors hover:bg-red-50 hover:text-red-700"
                 >
                   Disconnect
                 </button>
@@ -96,8 +110,10 @@ const LocalDrives = () => {
         )}
 
         <div className="mt-6 rounded-xl border border-gray-200 bg-white p-4">
-          <p className="text-xs text-gray-400 text-center">
-            🔒 Local mode — tokens are stored in your browser only and never sent to our servers.
+          <p className="text-xs text-gray-500 text-center">
+            {isNativeApp
+              ? '🔒 Tokens are stored on this phone only (encrypted). The AllDrive server only relays Google sign-in and token refreshes and never saves them.'
+              : '🔒 Local mode — tokens are stored in your browser only and never sent to our servers.'}
           </p>
         </div>
       </div>

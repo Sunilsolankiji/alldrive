@@ -7,9 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "android": "vite build --mode android && cap sync android",
+    "android:open": "cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/browser": "^8.0.4",
+    "@capacitor/core": "^8.5.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/sql.js": "^1.4.11",
     "@types/uuid": "^10.0.0",
@@ -24,6 +30,7 @@
     "uuid": "^14.0.2"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",

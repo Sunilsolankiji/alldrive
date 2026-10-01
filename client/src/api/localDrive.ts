@@ -1,7 +1,10 @@
 import axios from 'axios'
-import api from './axios'
+import { Browser } from '@capacitor/browser'
+import api, { API_BASE } from './axios'
 import type { DriveFile, LocalDriveAccount } from '../types'
 import { fetchOriginal } from './googlePhotos'
+import { isNativeApp, PhotoBackup } from './photoBackup'
+import { pkceChallenge, randomPkceValue } from '../utils/pkce'
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3'
 const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3'
@@ -13,13 +16,57 @@ export const getValidToken = (drive: LocalDriveAccount): string => drive.accessT
 export const isTokenExpired = (drive: LocalDriveAccount, now = Date.now()) =>
   !(now < drive.tokenExpiry - 60_000) // also true for a missing/invalid expiry
 
+/** Where the Android app keeps the in-flight sign-in's PKCE verifier until Google sends it back. */
+export const MOBILE_OAUTH_KEY = 'alldrive_mobile_oauth'
+
 /** Redirects to Google sign-in. Pass the account email to reconnect it without the consent screen,
  *  or `consent` to show it anyway (needed to grant a newly added permission). */
 export const startGoogleConnect = async (loginHint?: string, consent = false) => {
+  if (isNativeApp) return startNativeGoogleConnect(loginHint)
   const res = await api.get<{ url: string }>('/drives/local-connect-url', {
     params: { ...(loginHint ? { login_hint: loginHint } : {}), ...(consent ? { consent: 1 } : {}) },
   })
   window.location.href = res.data.url
+}
+
+/** Android app: code flow with PKCE in a Custom Tab so we get a refresh token for background
+ *  backup. LocalDriveProvider finishes the flow when the deep link comes back. */
+const startNativeGoogleConnect = async (loginHint?: string) => {
+  if (!/^https:\/\//.test(API_BASE)) throw new Error('This build is missing VITE_API_URL (the https URL of your AllDrive server).')
+  const verifier = randomPkceValue()
+  const state = randomPkceValue()
+  const res = await api.get<{ url: string }>('/drives/mobile-connect-url', {
+    params: { code_challenge: await pkceChallenge(verifier), state, ...(loginHint ? { login_hint: loginHint } : {}) },
+  })
+  localStorage.setItem(MOBILE_OAUTH_KEY, JSON.stringify({ verifier, state }))
+  await Browser.open({ url: res.data.url })
+}
+
+/** Completes the Android sign-in from the `com.alldrive.app://auth?...` deep link.
+ *  Returns null for links that aren't ours. The refresh token goes to native encrypted storage. */
+export const finishNativeGoogleConnect = async (link: string): Promise<LocalDriveAccount | null> => {
+  if (!link.startsWith('com.alldrive.app://auth')) return null
+  const params = new URL(link).searchParams
+  const pending = JSON.parse(localStorage.getItem(MOBILE_OAUTH_KEY) || 'null') as { verifier: string; state: string } | null
+  localStorage.removeItem(MOBILE_OAUTH_KEY)
+  void Browser.close().catch(() => undefined) // already closed on some Android versions
+  if (params.get('error')) throw new Error(params.get('error') === 'access_denied' ? 'Google sign-in was cancelled.' : 'Google sign-in failed.')
+  // A link we didn't start (or a stale one) must not be accepted
+  if (!pending || params.get('state') !== pending.state || !params.get('code')) throw new Error('Sign-in link expired. Please connect again.')
+  const { data } = await api.post<{ accessToken: string; refreshToken: string; expiresAt: number; email: string; name: string; picture: string }>(
+    '/drives/mobile-token',
+    { code: params.get('code'), verifier: pending.verifier }
+  )
+  await PhotoBackup.saveAccount({ email: data.email, refreshToken: data.refreshToken, apiBase: API_BASE })
+  return {
+    id: crypto.randomUUID(),
+    accountEmail: data.email,
+    accountName: data.name,
+    profilePicture: data.picture,
+    accessToken: data.accessToken,
+    refreshToken: '', // kept only in the phone's encrypted storage
+    tokenExpiry: data.expiresAt,
+  }
 }
 
 const FILE_FIELDS =

@@ -12,6 +12,7 @@ Unified Google Drive viewer — connect multiple Google Drive accounts and brows
 - 🖼️ View photos, videos, PDFs and all file types
 - ⬆️ Upload files directly to any connected drive
 - 🔍 Search and filter across all drives
+- 📱 Android app with automatic photo backup to Google Photos
 
 ## Tech Stack
 
@@ -115,6 +116,36 @@ Every push to the default branch redeploys automatically.
 - The Render service sleeps after ~15 minutes without traffic; the next visit takes up to a minute to wake it.
 - While the Google OAuth consent screen is in **Testing**, only the Google accounts listed as test users can sign in (up to 100), and their refresh tokens expire after 7 days. Publishing the app for everyone requires Google's verification because the Drive and Photos scopes are sensitive.
 - Atlas M0 gives 512 MB, which is plenty: only account and drive metadata is stored, never files.
+
+---
+
+## Android app (automatic photo backup)
+
+The `client/android/` project wraps the same React app with [Capacitor](https://capacitorjs.com). It adds what a browser can't do: it backs up new photos and videos from your phone to the Google Photos account you choose, even when the app is closed.
+
+**Prerequisites:** Android Studio (includes the Android SDK) and JDK 21, plus a deployed AllDrive server on https (see *Deploy for free*). The app has no server of its own.
+
+1. **Google Cloud Console** → your OAuth client → Authorized redirect URIs → add `https://<name>.onrender.com/api/drives/mobile-callback`. Also enable the **Photos Library API**.
+2. Create `client/.env.android` with the server URL, for example:
+   ```env
+   VITE_API_URL=https://<name>.onrender.com/api
+   ```
+3. Build and open the project:
+   ```bash
+   cd client
+   npm run android        # builds the web app and copies it into android/
+   npm run android:open   # opens Android Studio; press Run to install on your phone
+   ```
+4. In the app, go to **My Drives** → **Add Drive** and sign in. Then go to **Backup** → choose the account → **Turn on backup**, and allow access to **all** photos and videos.
+
+**How backup works**
+
+- Backup starts a few seconds after a new photo or video is saved. It also checks every 15 minutes in case it missed something. It uses Wi‑Fi only by default; turn off **Wi‑Fi only** to also use mobile data.
+- Only media saved after you turn backup on is uploaded. **Back up existing photos** uploads everything else. Files already backed up are skipped.
+- Files go straight from the phone to Google Photos. They never pass through the AllDrive server.
+- **Sign-in and privacy:** The app signs in with Google's code flow plus PKCE. The server swaps the one-time code for tokens and refreshes access tokens when asked. It never stores or logs the tokens. The refresh token is kept only on the phone, encrypted with the Android Keystore. Android's cloud backup of app data is turned off, so the encrypted token can't be restored without its key.
+- While your OAuth consent screen is in **Testing**, Google expires refresh tokens after 7 days, so backup pauses and asks you to reconnect. Publish the app for unattended long-term backup.
+- Some phone makers' battery savers delay background work. If backups lag, set AllDrive's battery usage to *Unrestricted*.
 
 ---
 

@@ -44,7 +44,7 @@ const FilePreviewModal = ({ file, onClose, overridePreviewUrl, loading, onDelete
     >
       {/* Header */}
       <div
-        className="flex items-center justify-between px-6 py-4 bg-black/40"
+        className="flex items-center justify-between bg-black/40 px-4 py-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:px-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 min-w-0">

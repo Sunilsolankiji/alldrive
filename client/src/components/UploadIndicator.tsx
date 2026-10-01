@@ -15,7 +15,7 @@ const UploadIndicator = () => {
       to="/uploads"
       role="status"
       aria-live="polite"
-      className="fixed bottom-4 left-4 z-40 block w-72 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl transition-shadow hover:shadow-2xl"
+      className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-4 right-4 z-40 block rounded-2xl border border-gray-200 bg-white p-4 shadow-xl transition-shadow hover:shadow-2xl sm:right-auto sm:w-72"
     >
       <div className="flex items-center justify-between gap-3">
         <p className="truncate text-sm font-medium text-gray-900">{summary.label}</p>

@@ -10,6 +10,7 @@ import LocalLogin from './pages/LocalLogin'
 import LocalRegister from './pages/LocalRegister'
 import SyncPage from './pages/SyncPage'
 import Uploads from './pages/Uploads'
+import Backup from './pages/Backup'
 import { UploadProvider } from './context/UploadContext'
 
 const App = () => (
@@ -47,6 +48,15 @@ const App = () => (
               element={
                 <LocalProtectedRoute>
                   <Uploads />
+                </LocalProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/backup"
+              element={
+                <LocalProtectedRoute>
+                  <Backup />
                 </LocalProtectedRoute>
               }
             />

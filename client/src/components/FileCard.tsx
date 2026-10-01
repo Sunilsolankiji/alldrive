@@ -93,12 +93,14 @@ const FileCard = ({ file, onPreview, onDelete, onOpenFolder }: Props) => {
         </div>
       </div>
 
-      {/* Menu button */}
-      <div className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100">
+      {/* Menu button — always visible on touch screens, which have no hover */}
+      <div className="absolute right-2 top-2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
         <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen) }}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-600 shadow-md hover:bg-gray-50"
+            aria-label={`Actions for ${file.name}`}
+            aria-expanded={menuOpen}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-600 shadow-md hover:bg-gray-50 pointer-coarse:h-11 pointer-coarse:w-11"
           >
             ⋮
           </button>

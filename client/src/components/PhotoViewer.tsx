@@ -413,7 +413,7 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
         )}
         </div>
 
-        <div className={`pointer-events-none absolute inset-x-0 top-0 flex items-center gap-1 bg-gradient-to-b from-black/70 to-transparent p-2 ${chrome}`}>
+        <div className={`pointer-events-none absolute inset-x-0 top-0 flex items-center gap-1 bg-gradient-to-b from-black/70 to-transparent p-2 pt-[calc(0.5rem+env(safe-area-inset-top))] ${chrome}`}>
           <button type="button" onClick={onClose} className={`${barButton} pointer-events-auto`} aria-label="Back" title="Back (Esc)" autoFocus>
             <Icon path={ICONS.back} />
           </button>
