@@ -6,14 +6,14 @@ import { username } from '../utils/username'
 interface Props {
   drives: LocalDriveAccount[]
   onClose: () => void
-  onUploaded: () => void
+  /** Hands the files to the page, which uploads them in the background. */
+  onUpload: (drive: LocalDriveAccount, files: File[]) => void
 }
 
-const LocalUploadModal = ({ drives, onClose, onUploaded }: Props) => {
+const LocalUploadModal = ({ drives, onClose, onUpload }: Props) => {
   const [selectedId, setSelectedId] = useState(drives[0]?.id || '')
   const [files, setFiles] = useState<File[]>([])
-  const [progress, setProgress] = useState(0)
-  const [uploading, setUploading] = useState(false)
+  const [checking, setChecking] = useState(false)
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
   const [needsReconnect, setNeedsReconnect] = useState(false)
@@ -28,31 +28,13 @@ const LocalUploadModal = ({ drives, onClose, onUploaded }: Props) => {
     if (!files.length || !selectedId) return
     const drive = drives.find((d) => d.id === selectedId)
     if (!drive) return
-    if (files.some(localDriveApi.isPhotosMedia) && !(await localDriveApi.hasPhotosScope(drive).catch(() => false))) return askReconnect()
-    setUploading(true)
-    setError('')
-    try {
-      for (const file of files) {
-        if (localDriveApi.isPhotosMedia(file)) await localDriveApi.uploadToPhotos(drive, file, setProgress)
-        else await localDriveApi.uploadFile(drive, file, setProgress)
-      }
-      onUploaded()
-      onClose()
-    } catch (err) {
-      const res = (err as { response?: { status?: number; data?: unknown } }).response
-      // Drive/batchCreate errors are {error:{message}}; the raw Photos upload endpoint returns text like {"code":16,"message":...}
-      let data = res?.data
-      if (typeof data === 'string') try { data = JSON.parse(data) } catch { /* plain text */ }
-      const d = data as { error?: { message?: string }; message?: string } | string | undefined
-      const message = typeof d === 'object' ? d.error?.message ?? d.message : d || undefined
-      if (/not activated|has not been used|is disabled/i.test(message ?? ''))
-        setError('The Google Photos Library API is not enabled for this app. Enable it in Google Cloud Console (APIs & Services → Library), wait a minute, then try again.')
-      else if (res?.status === 401 || (res?.status === 403 && /scope/i.test(message ?? ''))) askReconnect()
-      else setError(`Upload failed: ${message ?? (err as Error).message ?? 'please try again.'}`)
-    } finally {
-      setUploading(false)
-      setProgress(0)
-    }
+    // Checked before handing off, so the reconnect prompt stays in the dialog that can act on it.
+    setChecking(true)
+    const allowed = !files.some(localDriveApi.isPhotosMedia) || (await localDriveApi.hasPhotosScope(drive).catch(() => false))
+    setChecking(false)
+    if (!allowed) return askReconnect()
+    onUpload(drive, files)
+    onClose()
   }
 
   return (
@@ -91,16 +73,6 @@ const LocalUploadModal = ({ drives, onClose, onUploaded }: Props) => {
             </p>
             <p className="mt-1 text-xs text-gray-500">Photos &amp; videos go to Google Photos; other files go to Google Drive.</p>
           </div>
-          {uploading && (
-            <div>
-              <div className="flex justify-between text-xs text-gray-600 mb-1">
-                <span>Uploading...</span><span>{progress}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
-              </div>
-            </div>
-          )}
           {error && (
             <div className="text-sm text-red-600">
               <p>{error}</p>
@@ -118,8 +90,8 @@ const LocalUploadModal = ({ drives, onClose, onUploaded }: Props) => {
         </div>
         <div className="flex gap-3 p-6 pt-0">
           <button onClick={onClose} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
-          <button onClick={handleUpload} disabled={!files.length || !selectedId || uploading} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors">
-            {uploading ? 'Uploading...' : 'Upload'}
+          <button onClick={handleUpload} disabled={!files.length || !selectedId || checking} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors">
+            {checking ? 'Starting...' : 'Upload'}
           </button>
         </div>
       </div>

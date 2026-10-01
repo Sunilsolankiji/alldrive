@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useLocalDrives } from '../context/LocalDriveContext'
+import { useUploads } from '../context/UploadContext'
 import * as localDriveApi from '../api/localDrive'
 import ConfirmDialog from '../components/ConfirmDialog'
 import DriveChip from '../components/DriveChip'
@@ -61,6 +62,7 @@ const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
 
 const LocalDashboard = () => {
   const { drives } = useLocalDrives()
+  const { enqueue, completed } = useUploads()
   const [tab, setTab] = useState<Tab>('photos')
   const [selectedDriveId, setSelectedDriveId] = useState<string | null>(null)
   const [search, setSearch] = useState<Record<Tab, string>>({ photos: '', files: '' })
@@ -75,6 +77,11 @@ const LocalDashboard = () => {
   const [driveViewerIndex, setDriveViewerIndex] = useState(-1)
 
   const displayDrives = useMemo(() => drives.map(toDisplayDrive), [drives])
+
+  // Each finished upload brings the new file into the listings.
+  useEffect(() => {
+    if (completed) setReloadKey((k) => k + 1)
+  }, [completed])
 
   // Re-render when the next token expires so that drive is dropped and the reconnect banner appears
   const [now, setNow] = useState(Date.now)
@@ -325,7 +332,7 @@ const LocalDashboard = () => {
         <LocalUploadModal
           drives={drives}
           onClose={() => setShowUpload(false)}
-          onUploaded={() => setReloadKey((k) => k + 1)}
+          onUpload={enqueue}
         />
       )}
       {previewFile && (

@@ -1,11 +1,14 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useLocalAccount } from '../context/LocalAccountContext'
+import { useUploads } from '../context/UploadContext'
 import { syncTokenKey } from '../utils/syncToken'
 
 const Navbar = () => {
   const { account, logout } = useLocalAccount()
+  const { items } = useUploads()
   const navigate = useNavigate()
   const isSynced = account ? !!localStorage.getItem(syncTokenKey(account.id)) : false
+  const busyUploads = items.filter((i) => i.status === 'pending' || i.status === 'uploading').length
 
   const handleLogout = async () => {
     await logout()
@@ -27,6 +30,18 @@ const Navbar = () => {
         </Link>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          <Link
+            to="/uploads"
+            className="relative rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-blue-600"
+          >
+            Uploads
+            {busyUploads > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-semibold text-white">
+                {busyUploads}
+              </span>
+            )}
+          </Link>
+
           <Link
             to="/drives"
             className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-blue-600"

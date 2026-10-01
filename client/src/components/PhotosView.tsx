@@ -45,6 +45,15 @@ const dayLabel = (d: Date) => {
   })
 }
 
+/** "" for the current month (the heading would be redundant), "September" for the current year,
+ *  "September 2024" otherwise — same year rule as the day labels. */
+const monthLabel = (d: Date) => {
+  const now = new Date()
+  const sameYear = d.getFullYear() === now.getFullYear()
+  if (sameYear && d.getMonth() === now.getMonth()) return ''
+  return d.toLocaleDateString(undefined, { month: 'long', year: sameYear ? undefined : 'numeric' })
+}
+
 /** Groups consecutive files by day, remembering each file's index in the flat list. */
 const groupByDay = (files: DriveFile[]) => {
   const groups: {
@@ -59,7 +68,7 @@ const groupByDay = (files: DriveFile[]) => {
     if (d.toDateString() !== lastDay) {
       groups.push({
         label: dayLabel(d),
-        monthLabel: d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+        monthLabel: monthLabel(d),
         monthKey: `${d.getFullYear()}-${d.getMonth()}`,
         items: [],
       })
@@ -76,12 +85,12 @@ const CheckCircle = ({ checked, className }: { checked: boolean; className: stri
       checked ? 'border-blue-600 bg-blue-600 text-white' : 'border-white bg-black/10 text-transparent hover:text-white/80'
     } ${className}`}
   >
-    <Icon path={ICONS.check} className="h-4 w-4" />
+    <Icon path={ICONS.check} className="h-3.5 w-3.5" />
   </span>
 )
 
 const PhotosView = ({ drives, search, typeFilter, hidden, reloadKey, onDelete }: Props) => {
-  const { files, loading, error, picking, pick } = useGooglePhotos(drives, reloadKey)
+  const { files, loading, error, needsAccess, picking, pick } = useGooglePhotos(drives, reloadKey)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [viewerIndex, setViewerIndex] = useState(-1)
   const [busy, setBusy] = useState(false)
@@ -227,6 +236,25 @@ const PhotosView = ({ drives, search, typeFilter, hidden, reloadKey, onDelete }:
 
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
+      {needsAccess.length > 0 && (
+        <div role="alert" className="mb-4 space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 sm:p-4">
+          {needsAccess.map((d) => (
+            <div key={d.id} className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+              <p className="text-sm text-amber-800">
+                <span className="font-semibold" title={d.accountEmail}>{username(d.accountEmail)}</span> hasn’t allowed
+                Google Photos access. Reconnect and tick the Google Photos permissions.
+              </p>
+              <button
+                onClick={() => localDriveApi.startGoogleConnect(d.accountEmail, true)}
+                className="shrink-0 rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-amber-700"
+              >
+                Reconnect
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {width > 0 &&
         groups.map((g, groupIndex) => {
           const keys = g.items.map((i) => fileKey(i.file))
@@ -235,8 +263,9 @@ const PhotosView = ({ drives, search, typeFilter, hidden, reloadKey, onDelete }:
           const ratios = g.items.map((i) => aspectRatio(i.file))
           return (
             <section key={keys[0]} className="group/day mb-6">
-              {(groupIndex === 0 || groups[groupIndex - 1].monthKey !== g.monthKey) && (
-                <h2 className="mb-3 mt-8 text-lg font-semibold text-gray-900 first:mt-0">{g.monthLabel}</h2>
+              {g.monthLabel && (groupIndex === 0 || groups[groupIndex - 1].monthKey !== g.monthKey) && (
+                // mt on the heading would be cancelled by `first:` (it's always first in its section)
+                <h2 className={`mb-3 text-2xl font-semibold text-gray-900 ${groupIndex ? 'mt-10' : ''}`}>{g.monthLabel}</h2>
               )}
               <div className="group/date relative mb-2 flex items-center">
                 {canSelectGroup && (
@@ -313,7 +342,7 @@ const PhotosView = ({ drives, search, typeFilter, hidden, reloadKey, onDelete }:
                               isSel || selecting ? '' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
                             }`}
                           >
-                            <CheckCircle checked={isSel} className="h-6 w-6" />
+                            <CheckCircle checked={isSel} className="h-5 w-5" />
                           </button>
                           {isVideo(file) && (
                             <span className="pointer-events-none absolute right-2 top-2 flex items-center gap-0.5 text-xs font-medium text-white drop-shadow">

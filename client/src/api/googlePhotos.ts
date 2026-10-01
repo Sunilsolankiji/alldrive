@@ -26,7 +26,7 @@ interface LibraryItem {
   productUrl?: string
   mimeType: string
   filename: string
-  mediaMetadata?: { creationTime?: string; width?: string; height?: string; photo?: PhotoMeta }
+  mediaMetadata?: { creationTime?: string; width?: string; height?: string; photo?: PhotoMeta; video?: object }
 }
 interface PickedItem {
   id: string
@@ -35,28 +35,30 @@ interface PickedItem {
     baseUrl: string
     mimeType: string
     filename?: string
-    mediaFileMetadata?: { width?: number; height?: number; cameraMake?: string; cameraModel?: string; photoMetadata?: PhotoMeta }
+    mediaFileMetadata?: { width?: number; height?: number; cameraMake?: string; cameraModel?: string; photoMetadata?: PhotoMeta; videoMetadata?: object }
   }
 }
 
 const toFile = (
   drive: LocalDriveAccount,
-  item: { id: string; baseUrl: string; photosAuth?: boolean; mimeType: string; name: string; time?: string; width?: string | number; height?: string | number; photo?: PhotoMeta; link?: string }
+  item: { id: string; baseUrl: string; photosAuth?: boolean; mimeType?: string; name: string; time?: string; width?: string | number; height?: string | number; photo?: PhotoMeta; video?: object; link?: string }
 ): DriveFile => {
   const width = Number(item.width) || undefined
   const height = Number(item.height) || undefined
   const p = item.photo
   const time = item.time ?? new Date(0).toISOString()
+  // Google omits mimeType on some items; the presence of video metadata is the reliable fallback signal.
+  const mimeType = item.mimeType || (item.video ? 'video/*' : 'image/*')
   return {
     id: item.id,
     name: item.name,
-    mimeType: item.mimeType,
+    mimeType,
     createdTime: time,
     modifiedTime: time,
     baseUrl: item.baseUrl,
     photosAuth: item.photosAuth,
     webViewLink: item.link,
-    imageMediaMetadata: item.mimeType.startsWith('image/')
+    imageMediaMetadata: mimeType.startsWith('image/')
       ? {
           width,
           height,
@@ -68,7 +70,7 @@ const toFile = (
           exposureTime: p?.exposureTime ? parseFloat(p.exposureTime) : undefined,
         }
       : undefined,
-    videoMediaMetadata: item.mimeType.startsWith('video/') ? { width, height } : undefined,
+    videoMediaMetadata: mimeType.startsWith('video/') ? { width, height } : undefined,
     driveAccountId: drive.id,
     driveEmail: drive.accountEmail,
     driveName: drive.accountName,
@@ -87,7 +89,7 @@ export const listAppCreated = async (drive: LocalDriveAccount): Promise<DriveFil
       params: { pageSize: 100, pageToken },
     })
     for (const m of data.mediaItems ?? [])
-      out.push(toFile(drive, { ...m, name: m.filename, time: m.mediaMetadata?.creationTime, ...m.mediaMetadata, link: m.productUrl }))
+      out.push(toFile(drive, { ...m, name: m.filename ?? m.id, time: m.mediaMetadata?.creationTime, ...m.mediaMetadata, link: m.productUrl }))
     pageToken = data.nextPageToken
   } while (pageToken)
   return out
@@ -125,6 +127,7 @@ const listSession = async (drive: LocalDriveAccount, sessionId: string): Promise
           width: f.mediaFileMetadata?.width,
           height: f.mediaFileMetadata?.height,
           photo: { ...f.mediaFileMetadata, ...f.mediaFileMetadata?.photoMetadata },
+          video: f.mediaFileMetadata?.videoMetadata,
         })
       )
     pageToken = data.nextPageToken

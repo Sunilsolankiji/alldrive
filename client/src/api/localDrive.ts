@@ -62,7 +62,8 @@ export const listFiles = async (
 export const uploadFile = async (
   drive: LocalDriveAccount,
   file: File,
-  onProgress?: (pct: number) => void
+  onProgress?: (pct: number) => void,
+  signal?: AbortSignal
 ): Promise<void> => {
   const token = getValidToken(drive)
   const metadata = JSON.stringify({ name: file.name, mimeType: file.type })
@@ -72,6 +73,7 @@ export const uploadFile = async (
 
   await axios.post(`${UPLOAD_API}/files?uploadType=multipart`, body, {
     headers: { Authorization: `Bearer ${token}` },
+    signal,
     onUploadProgress: (e) => {
       if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100))
     },
@@ -127,6 +129,21 @@ const PHOTOS_API = 'https://photoslibrary.googleapis.com/v1'
 /** Google Photos only accepts photos and videos; everything else stays on Drive. */
 export const isPhotosMedia = (file: File) => /^(image|video)\//.test(file.type)
 
+/** Readable reason an upload failed. Drive/batchCreate return {error:{message}}; the raw
+ *  Photos upload endpoint returns text like {"code":16,"message":...}. */
+export const uploadErrorMessage = (err: unknown): string => {
+  const res = (err as { response?: { status?: number; data?: unknown } }).response
+  let data = res?.data
+  if (typeof data === 'string') try { data = JSON.parse(data) } catch { /* plain text */ }
+  const d = data as { error?: { message?: string }; message?: string } | string | undefined
+  const message = (typeof d === 'object' ? d?.error?.message ?? d?.message : d) || (err as Error).message
+  if (/not activated|has not been used|is disabled/i.test(message ?? ''))
+    return 'The Google Photos Library API is not enabled for this app. Enable it in Google Cloud Console (APIs & Services → Library), wait a minute, then try again.'
+  if (res?.status === 401 || (res?.status === 403 && /scope/i.test(message ?? '')))
+    return 'Google rejected the upload — reconnect the account and tick the Google Photos permission.'
+  return message ?? 'please try again.'
+}
+
 /** Whether the token may upload to Google Photos (users can untick it on the consent screen). Asks Google, not the stored copy. */
 export const hasPhotosScope = async (drive: LocalDriveAccount) => {
   const { data } = await axios.post<{ scope?: string }>(
@@ -137,7 +154,7 @@ export const hasPhotosScope = async (drive: LocalDriveAccount) => {
 }
 
 /** Uploads a photo/video into the account's Google Photos library (raw upload + batchCreate). */
-export const uploadToPhotos = async (drive: LocalDriveAccount, file: File, onProgress?: (pct: number) => void): Promise<void> => {
+export const uploadToPhotos = async (drive: LocalDriveAccount, file: File, onProgress?: (pct: number) => void, signal?: AbortSignal): Promise<void> => {
   const auth = 'Bearer ' + getValidToken(drive)
   const { data: uploadToken } = await axios.post<string>(`${PHOTOS_API}/uploads`, file, {
     headers: {
@@ -147,6 +164,7 @@ export const uploadToPhotos = async (drive: LocalDriveAccount, file: File, onPro
       'X-Goog-Upload-Protocol': 'raw',
     },
     responseType: 'text',
+    signal,
     onUploadProgress: (e) => {
       if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100))
     },
@@ -154,7 +172,7 @@ export const uploadToPhotos = async (drive: LocalDriveAccount, file: File, onPro
   const { data } = await axios.post<{ newMediaItemResults?: { status?: { code?: number; message?: string } }[] }>(
     `${PHOTOS_API}/mediaItems:batchCreate`,
     { newMediaItems: [{ simpleMediaItem: { uploadToken, fileName: file.name } }] },
-    { headers: { Authorization: auth } }
+    { headers: { Authorization: auth }, signal }
   )
   const status = data.newMediaItemResults?.[0]?.status
   if (status?.code) throw new Error(status.message || 'Google Photos rejected the file')

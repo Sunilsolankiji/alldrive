@@ -11,6 +11,14 @@ export const aspectRatio = (f: DriveFile) => {
   return Math.min(Math.max(r, 0.5), 2.5)
 }
 
+/** Intrinsic pixel size from metadata, rotation-aware. Undefined when the file doesn't report it. */
+export const naturalSize = (f: DriveFile) => {
+  const m = f.imageMediaMetadata ?? f.videoMediaMetadata
+  if (!m?.width || !m?.height) return undefined
+  const swap = (f.imageMediaMetadata?.rotation ?? 0) % 2 === 1
+  return { width: swap ? m.height : m.width, height: swap ? m.width : m.height }
+}
+
 export const formatSize = (size?: string) => {
   const bytes = Number(size)
   if (!bytes) return ''

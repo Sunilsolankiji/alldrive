@@ -3,7 +3,7 @@ import * as googlePhotos from '../api/googlePhotos'
 import * as localDriveApi from '../api/localDrive'
 import { fileKey } from '../hooks/usePagedDriveFiles'
 import type { DriveFile, LocalDriveAccount } from '../types'
-import { isVideo } from '../utils/photoLayout'
+import { isVideo, naturalSize } from '../utils/photoLayout'
 import MediaImg from './MediaImg'
 import PhotoInfo from './PhotoInfo'
 
@@ -59,6 +59,13 @@ export const preloadFull = (f?: DriveFile, drive?: LocalDriveAccount) => {
 }
 const needsOriginal = (f: DriveFile) => isVideo(f) || !(f.thumbnailLink || f.baseUrl)
 
+/** Caps the image box at the file's real pixel size so small photos show 1:1 instead of being blown
+ *  up to fill the stage. Placeholder and full image share the box, so the swap never shifts. */
+const naturalBox = (f: DriveFile) => {
+  const n = naturalSize(f)
+  return n ? { maxWidth: n.width, maxHeight: n.height } : undefined
+}
+
 const barButton = 'rounded-full p-2.5 text-white/90 hover:bg-white/10 hover:text-white disabled:opacity-40'
 const ZOOM = 2.5
 
@@ -81,6 +88,7 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [panning, setPanning] = useState(false)
   const panStart = useRef<{ px: number; py: number; x: number; y: number } | null>(null)
+  const layerRef = useRef<HTMLDivElement>(null)
   const [loadedSrc, setLoadedSrc] = useState('')
   const [chromeVisible, setChromeVisible] = useState(true)
   const [dragX, setDragX] = useState(0)
@@ -221,14 +229,17 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
   const chrome = `transition-opacity duration-300 ${chromeVisible || showInfo ? 'opacity-100' : 'opacity-0'}`
 
   const zoomPoint = (e: React.MouseEvent<HTMLElement>) => {
-    const r = e.currentTarget.getBoundingClientRect()
+    const r = (layerRef.current ?? e.currentTarget).getBoundingClientRect()
     return { x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100 }
   }
 
-  /** Keeps the zoomed layer covering the stage so the photo can't be dragged off-screen. */
+  /** Keeps the zoomed image covering its own box so it can't be dragged off-screen.
+   *  Uses offset sizes, which ignore the scale transform already applied to the layer. */
   const clampPan = (x: number, y: number, el: HTMLElement) => {
+    const layer = layerRef.current ?? el
     if (!zoom) return { x: 0, y: 0 }
-    const { width: w, height: h } = el.getBoundingClientRect()
+    const w = layer.offsetWidth
+    const h = layer.offsetHeight
     const ox = (zoom.x / 100) * w
     const oy = (zoom.y / 100) * h
     const k = ZOOM - 1
@@ -286,7 +297,9 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
               f && (
                 <div key={fileKey(f)} className={`absolute inset-y-0 w-full ${i ? 'left-full' : '-left-full'}`}>
                   {thumb(f, 's1') && (
-                    <MediaImg authDrive={authOf(f)} src={thumb(f, `s${px}`)} alt="" referrerPolicy="no-referrer" draggable={false} className="h-full w-full object-contain" />
+                    <div className="absolute inset-0 m-auto" style={naturalBox(f)}>
+                      <MediaImg authDrive={authOf(f)} src={thumb(f, `s${px}`)} alt="" referrerPolicy="no-referrer" draggable={false} className="h-full w-full object-contain" />
+                    </div>
                   )}
                 </div>
               )
@@ -329,12 +342,14 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
             }}
           >
             <div
-              className={`absolute inset-0 ease-out ${panning ? '' : 'transition-transform duration-200'}`}
-              style={
-                zoom
+              ref={layerRef}
+              className={`absolute inset-0 m-auto ease-out ${panning ? '' : 'transition-transform duration-200'}`}
+              style={{
+                ...naturalBox(file),
+                ...(zoom
                   ? { transform: `translate(${pan.x}px, ${pan.y}px) scale(${ZOOM})`, transformOrigin: `${zoom.x}% ${zoom.y}%` }
-                  : undefined
-              }
+                  : undefined),
+              }}
             >
               {preview && loadedSrc !== full && (
                 <MediaImg authDrive={authOf(file)} src={preview} alt="" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-contain" />

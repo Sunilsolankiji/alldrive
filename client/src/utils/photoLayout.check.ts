@@ -1,6 +1,6 @@
 // Run: node --experimental-strip-types client/src/utils/photoLayout.check.ts
 import assert from 'node:assert/strict'
-import { formatExposure, justify } from './photoLayout.ts'
+import { formatExposure, justify, naturalSize } from './photoLayout.ts'
 
 const width = 1000
 const gap = 4
@@ -29,3 +29,15 @@ assert.equal(formatExposure(0.008), '1/125')
 assert.equal(formatExposure(2), '2s')
 assert.equal(formatExposure(0), '')
 console.log('photo info formatting: ok')
+
+// naturalSize: swaps for quarter-turn rotations only, falls back to video metadata, undefined when unknown.
+type F = Parameters<typeof naturalSize>[0]
+const img = (width: number, height: number, rotation?: number) => ({ imageMediaMetadata: { width, height, rotation } }) as F
+assert.deepEqual(naturalSize(img(4000, 3000)), { width: 4000, height: 3000 })
+assert.deepEqual(naturalSize(img(4000, 3000, 1)), { width: 3000, height: 4000 })
+assert.deepEqual(naturalSize(img(4000, 3000, 3)), { width: 3000, height: 4000 })
+assert.deepEqual(naturalSize(img(4000, 3000, 2)), { width: 4000, height: 3000 })
+assert.deepEqual(naturalSize({ videoMediaMetadata: { width: 1920, height: 1080 } } as F), { width: 1920, height: 1080 })
+assert.equal(naturalSize({} as F), undefined)
+assert.equal(naturalSize(img(0, 0)), undefined)
+console.log('naturalSize: ok')
