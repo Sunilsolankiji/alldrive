@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Photo viewer: the slide track moves in from where the previous photo was (see PhotoViewer go()). */
+@keyframes viewer-slide {
+  from {
+    transform: translateX(var(--slide-from));
+  }
+}
+
 * {
   box-sizing: border-box;
 }

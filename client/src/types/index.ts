@@ -19,9 +19,12 @@ export interface DriveFile {
   mimeType: string
   size?: string
   modifiedTime: string
+  createdTime?: string
   thumbnailLink?: string
   webViewLink?: string
   iconLink?: string
+  imageMediaMetadata?: { width?: number; height?: number; rotation?: number }
+  videoMediaMetadata?: { width?: number; height?: number; durationMillis?: string }
   driveAccountId: string
   driveEmail: string
   driveName: string

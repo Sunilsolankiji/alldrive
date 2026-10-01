@@ -25,6 +25,7 @@ export const localConnectUrl = (req: Request, res: ExpressResponse): void => {
   const clientId = process.env.GOOGLE_CLIENT_ID!
   const redirectUri = `${process.env.CLIENT_URL}/callback`
   const scope = SCOPES.join(' ')
+  const loginHint = typeof req.query.login_hint === 'string' ? req.query.login_hint : ''
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -32,8 +33,10 @@ export const localConnectUrl = (req: Request, res: ExpressResponse): void => {
     response_type: 'token',
     scope,
     include_granted_scopes: 'true',
-    prompt: 'consent select_account',
   })
+  // Reconnect: target the known account and skip consent so Google can redirect straight back
+  if (loginHint) params.set('login_hint', loginHint)
+  else params.set('prompt', 'consent select_account')
 
   res.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` })
 }

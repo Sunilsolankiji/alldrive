@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import path from 'path'
 import connectDB, { isDbConnected } from './config/db'
 import authRoutes from './routes/auth'
 import drivesRoutes from './routes/drives'
@@ -36,6 +37,13 @@ app.use('/api', (_req, res, next) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/drives', drivesRoutes)
 app.use('/api/files', filesRoutes)
+
+if (process.env.NODE_ENV === 'production') {
+  // compiled to server/dist/index.js, so the client build is two levels up
+  const clientDist = path.join(__dirname, '..', '..', 'client', 'dist')
+  app.use(express.static(clientDist))
+  app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(path.join(clientDist, 'index.html')))
+}
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err.stack)

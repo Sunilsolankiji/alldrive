@@ -5,6 +5,7 @@ interface Props {
   files: DriveFile[]
   onPreview: (file: DriveFile) => void
   onDelete: (file: DriveFile) => void
+  onOpenFolder?: (file: DriveFile) => void
 }
 
 const SkeletonCard = () => (
@@ -17,10 +18,10 @@ const SkeletonCard = () => (
   </div>
 )
 
-const FileGrid = ({ files, onPreview, onDelete }: Props) => (
+const FileGrid = ({ files, onPreview, onDelete, onOpenFolder }: Props) => (
   <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
     {files.map((file) => (
-      <FileCard key={`${file.driveAccountId}-${file.id}`} file={file} onPreview={onPreview} onDelete={onDelete} />
+      <FileCard key={`${file.driveAccountId}-${file.id}`} file={file} onPreview={onPreview} onDelete={onDelete} onOpenFolder={onOpenFolder} />
     ))}
   </div>
 )

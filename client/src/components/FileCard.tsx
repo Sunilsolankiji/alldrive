@@ -6,9 +6,13 @@ interface Props {
   file: DriveFile
   onPreview: (file: DriveFile) => void
   onDelete: (file: DriveFile) => void
+  onOpenFolder?: (file: DriveFile) => void
 }
 
+export const FOLDER_MIME = 'application/vnd.google-apps.folder'
+
 const getMimeIcon = (mimeType: string) => {
+  if (mimeType === FOLDER_MIME) return '📂'
   if (mimeType.startsWith('image/')) return '🖼️'
   if (mimeType.startsWith('video/')) return '🎬'
   if (mimeType.startsWith('audio/')) return '🎵'
@@ -33,27 +37,34 @@ const isPreviewable = (mimeType: string) =>
   mimeType.startsWith('video/') ||
   mimeType === 'application/pdf'
 
-const FileCard = ({ file, onPreview, onDelete }: Props) => {
+const FileCard = ({ file, onPreview, onDelete, onOpenFolder }: Props) => {
   const [menuOpen, setMenuOpen] = useState(false)
-  const isImage = file.mimeType.startsWith('image/')
+  const isFolder = file.mimeType === FOLDER_MIME
+  const isVideo = file.mimeType.startsWith('video/')
+  const hasThumb = (file.mimeType.startsWith('image/') || isVideo) && !!file.thumbnailLink
   const canPreview = isPreviewable(file.mimeType)
+  const canOpen = isFolder ? !!onOpenFolder : canPreview
 
   return (
     <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
       {/* Thumbnail */}
       <div
-        className={`relative aspect-square overflow-hidden bg-gray-100 ${canPreview ? 'cursor-pointer' : 'cursor-default'}`}
-        onClick={() => canPreview && onPreview(file)}
+        className={`relative aspect-square overflow-hidden bg-gray-100 ${canOpen ? 'cursor-pointer' : 'cursor-default'}`}
+        onClick={() => (isFolder ? onOpenFolder?.(file) : canPreview && onPreview(file))}
       >
-        {isImage && file.thumbnailLink ? (
+        {hasThumb ? (
           <img
             src={file.thumbnailLink}
             alt={file.name}
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
             loading="lazy"
+            referrerPolicy="no-referrer"
           />
         ) : (
           <span className="text-5xl">{getMimeIcon(file.mimeType)}</span>
+        )}
+        {isVideo && hasThumb && (
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-4xl text-white drop-shadow">▶</span>
         )}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/25 to-transparent" />
       </div>
@@ -65,7 +76,7 @@ const FileCard = ({ file, onPreview, onDelete }: Props) => {
         </p>
         <div className="flex items-center justify-between gap-3">
           <span className="rounded bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">
-            {formatSize(file.size) || 'File'}
+            {isFolder ? 'Folder' : formatSize(file.size) || 'File'}
           </span>
           <span className="max-w-[110px] truncate text-xs text-gray-500" title={file.driveEmail}>
             {file.driveName || file.driveEmail}
@@ -87,6 +98,14 @@ const FileCard = ({ file, onPreview, onDelete }: Props) => {
               className="absolute right-0 top-9 z-10 min-w-[150px] rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
               onMouseLeave={() => setMenuOpen(false)}
             >
+              {isFolder && onOpenFolder && (
+                <button
+                  onClick={() => { onOpenFolder(file); setMenuOpen(false) }}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  📂 Open
+                </button>
+              )}
               {canPreview && (
                 <button
                   onClick={() => { onPreview(file); setMenuOpen(false) }}
@@ -95,15 +114,17 @@ const FileCard = ({ file, onPreview, onDelete }: Props) => {
                   👁 Preview
                 </button>
               )}
-              <a
-                href={getDownloadUrl(file.driveAccountId, file.id)}
-                target="_blank"
-                rel="noreferrer"
-                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                onClick={() => setMenuOpen(false)}
-              >
-                ⬇ Download
-              </a>
+              {!isFolder && (
+                <a
+                  href={getDownloadUrl(file.driveAccountId, file.id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  ⬇ Download
+                </a>
+              )}
               {file.webViewLink && (
                 <a
                   href={file.webViewLink}

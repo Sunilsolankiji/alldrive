@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from 'react'
 import { useLocalDrives } from '../context/LocalDriveContext'
-import api from '../api/axios'
+import { startGoogleConnect } from '../api/localDrive'
 import Navbar from '../components/Navbar'
 
 const LocalDrives = () => {
@@ -17,8 +17,7 @@ const LocalDrives = () => {
   const handleConnect = async () => {
     setConnecting(true)
     try {
-      const res = await api.get<{ url: string }>('/drives/local-connect-url')
-      window.location.href = res.data.url
+      await startGoogleConnect()
     } catch {
       setConnecting(false)
     }

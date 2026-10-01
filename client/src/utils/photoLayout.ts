@@ -1,0 +1,63 @@
+import type { DriveFile } from '../types'
+
+export const takenAt = (f: DriveFile) => f.createdTime ?? f.modifiedTime
+export const isVideo = (f: DriveFile) => f.mimeType.startsWith('video/')
+
+/** Width / height from Drive metadata, rotation-aware, clamped so panoramas don't take a whole row. */
+export const aspectRatio = (f: DriveFile) => {
+  const m = f.imageMediaMetadata ?? f.videoMediaMetadata
+  if (!m?.width || !m?.height) return 1
+  const r = (f.imageMediaMetadata?.rotation ?? 0) % 2 ? m.height / m.width : m.width / m.height
+  return Math.min(Math.max(r, 0.5), 2.5)
+}
+
+export const formatSize = (size?: string) => {
+  const bytes = Number(size)
+  if (!bytes) return ''
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+export interface JustifiedRow {
+  start: number
+  end: number
+  height: number
+}
+
+/**
+ * Google-Photos-style justified rows: every full row exactly fills `width`, with a height as
+ * close to `target` as possible. The last (incomplete) row keeps the target height.
+ */
+export function justify(ratios: number[], width: number, target: number, gap: number): JustifiedRow[] {
+  const rows: JustifiedRow[] = []
+  if (width <= 0) return rows
+  const fit = (sum: number, n: number) => (width - gap * (n - 1)) / sum
+  let start = 0
+  let sum = 0
+  for (let i = 0; i < ratios.length; i++) {
+    const n = i - start + 1
+    if ((sum + ratios[i]) * target + gap * (n - 1) < width) {
+      sum += ratios[i]
+      continue
+    }
+    const withItem = fit(sum + ratios[i], n)
+    const without = n > 1 ? fit(sum, n - 1) : Infinity
+    if (Math.abs(withItem - target) <= Math.abs(without - target)) {
+      rows.push({ start, end: i + 1, height: withItem })
+      start = i + 1
+      sum = 0
+    } else {
+      rows.push({ start, end: i, height: without })
+      start = i
+      sum = ratios[i]
+      // the item that started the new row may already fill it on its own
+      if (sum * target >= width) {
+        rows.push({ start, end: i + 1, height: fit(sum, 1) })
+        start = i + 1
+        sum = 0
+      }
+    }
+  }
+  if (start < ratios.length) rows.push({ start, end: ratios.length, height: target })
+  return rows
+}

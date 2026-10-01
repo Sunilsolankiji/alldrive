@@ -48,11 +48,11 @@ cp server/.env.example server/.env
 Edit `server/.env`:
 
 ```env
-MONGODB_URI=mongodb://localhost:27017/alldrive
+MONGODB_URI=mongodb://127.0.0.1:27017/alldrive
 JWT_SECRET=any-long-random-string
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_REDIRECT_URI=http://localhost:5000/api/drives/callback
+GOOGLE_REDIRECT_URI=http://localhost:5173/api/drives/callback
 CLIENT_URL=http://localhost:5173
 PORT=5000
 ```
@@ -67,7 +67,9 @@ PORT=5000
    - Authorized JavaScript origins: `http://localhost:5173`
    - Authorized redirect URIs:
      - `http://localhost:5173/callback` ← required for local drive connect
-     - `http://localhost:5000/api/drives/callback` ← for server sync mode
+     - `http://localhost:5173/api/drives/callback` ← for server sync mode (Vite proxies `/api` to the server)
+
+   Everything runs through port 5173 in dev (Vite is pinned to it with `strictPort`). In production, `npm run build` then `NODE_ENV=production npm start --prefix server` serves the client and API from the server's single port.
 5. Copy the **Client ID** and **Client Secret** into `server/.env`
 6. OAuth consent screen → add your Gmail as a **Test user**
 
@@ -77,7 +79,7 @@ PORT=5000
 npm run dev
 ```
 
-Opens at **http://localhost:5173**
+Opens at **http://localhost:27017**
 
 ---
 

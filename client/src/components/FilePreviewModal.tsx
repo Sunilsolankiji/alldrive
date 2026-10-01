@@ -5,13 +5,22 @@ interface Props {
   file: DriveFile
   onClose: () => void
   overridePreviewUrl?: string  // used in local mode — direct google URL with token
+  loading?: boolean
+  onDelete?: (file: DriveFile) => void
 }
 
-const FilePreviewModal = ({ file, onClose, overridePreviewUrl }: Props) => {
+const FilePreviewModal = ({ file, onClose, overridePreviewUrl, loading, onDelete }: Props) => {
   const previewUrl = overridePreviewUrl ?? getPreviewUrl(file.driveAccountId, file.id)
   const downloadUrl = getDownloadUrl(file.driveAccountId, file.id)
 
   const renderPreview = () => {
+    if (loading)
+      return (
+        <div className="flex flex-col items-center gap-3 text-white" role="status">
+          <span className="h-10 w-10 animate-spin rounded-full border-4 border-white/30 border-t-white" />
+          <span className="text-sm text-gray-300">Loading…</span>
+        </div>
+      )
     if (file.mimeType.startsWith('image/'))
       return <img src={previewUrl} alt={file.name} className="max-w-full max-h-full object-contain" />
     if (file.mimeType.startsWith('video/'))
@@ -50,6 +59,14 @@ const FilePreviewModal = ({ file, onClose, overridePreviewUrl }: Props) => {
           >
             ⬇ Download
           </a>
+          {onDelete && (
+            <button
+              onClick={() => onDelete(file)}
+              className="px-3 py-1.5 bg-white/10 hover:bg-red-500/80 text-white text-sm rounded-lg transition-colors"
+            >
+              🗑 Delete
+            </button>
+          )}
           <button
             onClick={onClose}
             className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg transition-colors"
