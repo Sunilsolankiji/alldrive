@@ -16,6 +16,7 @@ export const ICONS = {
   info: 'M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z',
   openInDrive: 'M14,3V5H17.59L7.76,14.83L9.17,16.24L19,6.41V10H21V3M19,19H5V5H12V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V12H19V19Z',
   fullscreen: 'M5,5H10V7H7V10H5V5M14,5H19V10H17V7H14V5M17,14H19V19H14V17H17V14M10,17V19H5V14H7V17H10Z',
+  exitFullscreen: 'M14,14H19V16H16V19H14V14M5,14H10V19H8V16H5V14M8,5H10V10H5V8H8V5M19,8V10H14V5H16V8H19Z',
   play: 'M8,5.14V19.14L19,12.14L8,5.14Z',
 }
 
@@ -44,6 +45,15 @@ const needsOriginal = (f: DriveFile) => isVideo(f) || !f.thumbnailLink
 
 const barButton = 'rounded-full p-2.5 text-white/90 hover:bg-white/10 hover:text-white disabled:opacity-40'
 const ZOOM = 2.5
+
+// Fullscreen API with the Safari (webkit-prefixed) fallback. iPhone Safari has neither, so the button is hidden there.
+type WebkitDocument = Document & { webkitFullscreenElement?: Element; webkitFullscreenEnabled?: boolean; webkitExitFullscreen?: () => Promise<void> }
+type WebkitElement = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> }
+const doc = document as WebkitDocument
+const canFullscreen = !!(doc.fullscreenEnabled || doc.webkitFullscreenEnabled)
+const fullscreenElement = () => doc.fullscreenElement ?? doc.webkitFullscreenElement ?? null
+const exitFullscreen = () => (doc.exitFullscreen ? doc.exitFullscreen() : doc.webkitExitFullscreen?.())
+const requestFullscreen = (el: WebkitElement) => (el.requestFullscreen ? el.requestFullscreen() : el.webkitRequestFullscreen?.())
 const navButton =
   'absolute top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-2 enabled:hover:bg-black/70 disabled:cursor-not-allowed disabled:bg-black/20 disabled:text-white/25 max-sm:hidden'
 
@@ -62,6 +72,28 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
   // n restarts the slide animation (via key); from = where the track starts, in px
   const [slide, setSlide] = useState({ n: 0, from: '0px' })
   const stageRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  useEffect(() => {
+    const sync = () => setIsFullscreen(!!fullscreenElement())
+    document.addEventListener('fullscreenchange', sync)
+    document.addEventListener('webkitfullscreenchange', sync)
+    return () => {
+      document.removeEventListener('fullscreenchange', sync)
+      document.removeEventListener('webkitfullscreenchange', sync)
+      if (fullscreenElement()) void exitFullscreen() // leaving the viewer leaves full screen too
+    }
+  }, [])
+
+  const toggleFullscreen = async () => {
+    try {
+      if (fullscreenElement()) await exitFullscreen()
+      else await requestFullscreen(rootRef.current!)
+    } catch (err) {
+      console.warn('Full screen was blocked by the browser', err)
+    }
+  }
   const touchX = useRef<number | null>(null)
   const hideTimer = useRef<number>(undefined)
 
@@ -126,7 +158,7 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (zoom) setZoom(null)
-        else if (document.fullscreenElement) void document.exitFullscreen()
+        else if (fullscreenElement()) void exitFullscreen()
         else onClose()
       } else if (e.key === 'ArrowLeft') go(-1)
       else if (e.key === 'ArrowRight') go(1)
@@ -134,6 +166,7 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
         setZoom(null)
         onDelete(file)
       } else if (e.key === 'i') setShowInfo((s) => !s)
+      else if (e.key === 'f' && canFullscreen) void toggleFullscreen()
       else return
       e.preventDefault()
     }
@@ -176,6 +209,7 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
 
   return (
     <div
+      ref={rootRef}
       role="dialog"
       aria-modal="true"
       aria-label={file.name}
@@ -304,15 +338,18 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
             <button type="button" onClick={() => setShowInfo((s) => !s)} className={`${barButton} ${showInfo ? 'bg-white/15' : ''}`} aria-label="Info" aria-pressed={showInfo} title="Info (i)">
               <Icon path={ICONS.info} />
             </button>
-            <button
-              type="button"
-              onClick={() => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen())}
-              className={barButton}
-              aria-label="Full screen"
-              title="Full screen"
-            >
-              <Icon path={ICONS.fullscreen} />
-            </button>
+            {canFullscreen && (
+              <button
+                type="button"
+                onClick={toggleFullscreen}
+                className={barButton}
+                aria-label={isFullscreen ? 'Exit full screen' : 'Full screen'}
+                aria-pressed={isFullscreen}
+                title={isFullscreen ? 'Exit full screen (f)' : 'Full screen (f)'}
+              >
+                <Icon path={isFullscreen ? ICONS.exitFullscreen : ICONS.fullscreen} />
+              </button>
+            )}
             <button type="button" onClick={() => onDownload(file)} className={barButton} aria-label="Download" title="Download">
               <Icon path={ICONS.download} />
             </button>
