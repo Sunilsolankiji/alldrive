@@ -1,6 +1,6 @@
 // Run: node --experimental-strip-types client/src/utils/photoLayout.check.ts
 import assert from 'node:assert/strict'
-import { formatExposure, justify, naturalSize } from './photoLayout.ts'
+import { formatDuration, formatExposure, justify, naturalSize } from './photoLayout.ts'
 
 const width = 1000
 const gap = 4
@@ -41,3 +41,12 @@ assert.deepEqual(naturalSize({ videoMediaMetadata: { width: 1920, height: 1080 }
 assert.equal(naturalSize({} as F), undefined)
 assert.equal(naturalSize(img(0, 0)), undefined)
 console.log('naturalSize: ok')
+
+assert.equal(formatDuration('7000'), '0:07')
+assert.equal(formatDuration(754_000), '12:34')
+assert.equal(formatDuration(3_723_000), '1:02:03')
+assert.equal(formatDuration(59_600), '1:00') // rounds into the next minute cleanly
+assert.equal(formatDuration(undefined), '')
+assert.equal(formatDuration(Infinity), '') // live/unknown-length streams
+assert.equal(formatDuration(0), '')
+console.log('formatDuration: ok')

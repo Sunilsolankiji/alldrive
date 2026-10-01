@@ -7,6 +7,16 @@
   }
 }
 
+/* Photo viewer: Google Photos-style indeterminate loading bar. */
+@keyframes viewer-loading {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
 * {
   box-sizing: border-box;
 }

@@ -89,8 +89,9 @@ export const deleteFile = async (drive: LocalDriveAccount, fileId: string): Prom
 }
 
 /** Drive thumbnail links end in `=s220`; the same URL serves any size, cached on Google's CDN. */
+/** Google thumbnail at a size. `-no` stops Google drawing its own play button onto video thumbnails. */
 export const sizedThumbnail = (link: string, suffix: string) =>
-  /=s\d+$/.test(link) ? link.replace(/=s\d+$/, `=${suffix}`) : `${link}=${suffix}`
+  /=s\d+$/.test(link) ? link.replace(/=s\d+$/, `=${suffix}-no`) : `${link}=${suffix}-no`
 
 /** Downloads the file with an auth header and returns a blob URL. Caller must revoke it.
  *  Drive rejects `?access_token=` in the URL (403), and <img>/<video> can't send headers.

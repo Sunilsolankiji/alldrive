@@ -19,6 +19,16 @@ export const naturalSize = (f: DriveFile) => {
   return { width: swap ? m.height : m.width, height: swap ? m.width : m.height }
 }
 
+/** "0:07", "12:34", "1:02:03" — the clock style video players use. Empty when unknown. */
+export const formatDuration = (ms?: string | number) => {
+  const total = Math.round(Number(ms) / 1000)
+  if (!Number.isFinite(total) || total <= 0) return ''
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = String(total % 60).padStart(2, '0')
+  return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`
+}
+
 export const formatSize = (size?: string) => {
   const bytes = Number(size)
   if (!bytes) return ''

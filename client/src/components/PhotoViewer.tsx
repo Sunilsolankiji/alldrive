@@ -90,6 +90,13 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
   const panStart = useRef<{ px: number; py: number; x: number; y: number } | null>(null)
   const layerRef = useRef<HTMLDivElement>(null)
   const [loadedSrc, setLoadedSrc] = useState('')
+  /** The video src that has buffered enough to play; until then its thumbnail covers it. */
+  const [readyVideo, setReadyVideo] = useState('')
+  /** The low-res preview src that has painted; tells the loading bar the banner is on screen. */
+  const [shownPreview, setShownPreview] = useState('')
+  const previewRef = (src: string) => (el: HTMLImageElement | null) => {
+    if (el?.complete && el.naturalWidth && shownPreview !== src) setShownPreview(src)
+  }
   const [chromeVisible, setChromeVisible] = useState(true)
   const [dragX, setDragX] = useState(0)
   const [dragging, setDragging] = useState(false)
@@ -219,6 +226,8 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
   const full = original ?? thumb(file, `s${px}`)
   // Picker bytes are documented as needing the auth header; Library and Drive URLs don't
   const authOf = (f: DriveFile) => (f.photosAuth ? driveOf(f) : undefined)
+  // Videos use the circle on their thumbnail instead, so the bar is photos-only.
+  const showing = isVideo(file) || (!!preview && shownPreview === preview) || loadedSrc === full
   const canDelete = !file.baseUrl // the Google Photos API can't delete
 
   const pokeChrome = () => {
@@ -281,6 +290,14 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
         }}
       >
         <div
+          role="progressbar"
+          aria-label="Loading"
+          aria-hidden={showing}
+          className={`pointer-events-none absolute inset-x-0 top-0 z-20 h-1 overflow-hidden transition-opacity duration-300 ${showing ? 'opacity-0' : 'opacity-100'}`}
+        >
+          <div className="h-full w-2/5 bg-blue-400 motion-safe:animate-[viewer-loading_1.2s_ease-in-out_infinite]" />
+        </div>
+        <div
           key={slide.n}
           className="absolute inset-0 motion-safe:animate-[viewer-slide_320ms_cubic-bezier(0.2,0.8,0.2,1)]"
           style={
@@ -306,14 +323,30 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
           )}
         {isVideo(file) ? (
           <div className="absolute inset-0 flex items-center justify-center">
-            {original ? (
-              <video key={original} src={original} poster={(!file.baseUrl && preview) || undefined} controls autoPlay playsInline className="max-h-full max-w-full" />
-            ) : (
-              <>
-                {preview && <MediaImg authDrive={authOf(file)} src={preview} alt="" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-contain opacity-60" />}
-                <span className="relative h-10 w-10 animate-spin rounded-full border-4 border-white/30 border-t-white" aria-label="Loading video" />
-              </>
+            {original && (
+              <video
+                key={original}
+                src={original}
+                controls
+                autoPlay
+                playsInline
+                onCanPlay={() => setReadyVideo(original)}
+                className={`max-h-full max-w-full transition-opacity duration-300 ${readyVideo === original ? 'opacity-100' : 'opacity-0'}`}
+              />
             )}
+            {/* Thumbnail stays up until the video can actually play, then fades out over it. */}
+            <div
+              className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${
+                original && readyVideo === original ? 'opacity-0' : 'opacity-100'
+              }`}
+            >
+              {preview && (
+                <div className="absolute inset-0 m-auto" style={naturalBox(file)}>
+                  <MediaImg ref={previewRef(preview)} onLoad={() => setShownPreview(preview)} authDrive={authOf(file)} src={preview} alt="" referrerPolicy="no-referrer" draggable={false} className="h-full w-full object-contain" />
+                </div>
+              )}
+              <span className="relative h-12 w-12 animate-spin rounded-full border-4 border-white/25 border-t-white drop-shadow" role="status" aria-label="Loading video" />
+            </div>
           </div>
         ) : (
           <div
@@ -352,7 +385,7 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
               }}
             >
               {preview && loadedSrc !== full && (
-                <MediaImg authDrive={authOf(file)} src={preview} alt="" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-contain" />
+                <MediaImg ref={previewRef(preview)} onLoad={() => setShownPreview(preview)} authDrive={authOf(file)} src={preview} alt="" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-contain" />
               )}
               {full ? (
                 <MediaImg

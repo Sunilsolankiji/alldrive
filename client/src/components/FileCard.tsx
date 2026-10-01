@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { DriveFile } from '../types'
 import { getDownloadUrl } from '../api/files'
 import { username } from '../utils/username'
+import { formatDuration } from '../utils/photoLayout'
 import Avatar from './Avatar'
 
 interface Props {
@@ -67,6 +68,11 @@ const FileCard = ({ file, onPreview, onDelete, onOpenFolder }: Props) => {
         )}
         {isVideo && hasThumb && (
           <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-4xl text-white drop-shadow">▶</span>
+        )}
+        {isVideo && formatDuration(file.videoMediaMetadata?.durationMillis) && (
+          <span className="pointer-events-none absolute bottom-2 right-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-xs font-medium text-white">
+            {formatDuration(file.videoMediaMetadata?.durationMillis)}
+          </span>
         )}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/25 to-transparent" />
       </div>

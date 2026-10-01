@@ -181,10 +181,11 @@ export const pickFromGooglePhotos = async (drive: LocalDriveAccount) => {
   }
 }
 
-/** Image URL at a given size: `h440` = 440px tall rows, `s2048` = fits a 2048px box. */
+/** Image URL at a given size: `h440` = 440px tall rows, `s2048` = fits a 2048px box.
+ *  `-no` stops Google drawing its own play button onto video thumbnails. */
 export const sizedBaseUrl = (baseUrl: string, size: string) => {
   const n = Number(size.slice(1))
-  return `${baseUrl}=${size[0] === 'h' ? `w${n * 3}-h${n}` : `w${n}-h${n}`}`
+  return `${baseUrl}=${size[0] === 'h' ? `w${n * 3}-h${n}` : `w${n}-h${n}`}-no`
 }
 
 /** The original bytes (`=d` keeps EXIF except location; `=dv` is the video file). */

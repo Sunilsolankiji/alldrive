@@ -8,6 +8,7 @@ import { aspectRatio, isVideo, justify, takenAt } from '../utils/photoLayout'
 import { username } from '../utils/username'
 import MediaImg from './MediaImg'
 import PhotoViewer, { ICONS, Icon, preloadFull } from './PhotoViewer'
+import VideoDuration from './VideoDuration'
 
 interface Props {
   drives: LocalDriveAccount[]
@@ -23,12 +24,6 @@ const GAP = 4
 const noop = () => {}
 
 const rowHeight = (width: number) => (width < 600 ? 110 : width < 1200 ? 180 : 220)
-
-const formatDuration = (ms?: string) => {
-  if (!ms) return ''
-  const s = Math.round(Number(ms) / 1000)
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
 
 const dayLabel = (d: Date) => {
   const today = new Date()
@@ -345,9 +340,12 @@ const PhotosView = ({ drives, search, typeFilter, hidden, reloadKey, onDelete }:
                             <CheckCircle checked={isSel} className="h-5 w-5" />
                           </button>
                           {isVideo(file) && (
-                            <span className="pointer-events-none absolute right-2 top-2 flex items-center gap-0.5 text-xs font-medium text-white drop-shadow">
-                              {formatDuration(file.videoMediaMetadata?.durationMillis)}
-                              <Icon path={ICONS.play} className="h-4 w-4" />
+                            <span className="pointer-events-none absolute right-2 top-2 flex items-center text-xs font-medium leading-none tabular-nums text-white drop-shadow">
+                              <VideoDuration file={file} />
+                              {/* The play path is already offset right in its 24px box; no extra nudge needed. */}
+                              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-white">
+                                <Icon path={ICONS.play} className="h-3.5 w-3.5" />
+                              </span>
                             </span>
                           )}
                         </div>
