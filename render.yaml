@@ -1,0 +1,31 @@
+# Render Blueprint: one free web service serving both the built client and the API.
+# Deploy: Render dashboard → New → Blueprint → pick this repo. See README "Deploy for free".
+services:
+  - type: web
+    name: alldrive
+    runtime: node
+    plan: free
+    # --include=dev: TypeScript and Vite are devDependencies, and NODE_ENV=production would skip them.
+    buildCommand: npm ci --include=dev --prefix client && npm ci --include=dev --prefix server && npm run build
+    startCommand: npm start --prefix server
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: JWT_SECRET
+        generateValue: true
+      # Filled in when the Blueprint is created (sync: false = prompt, never stored in git).
+      - key: MONGODB_URI
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      # https://<your-service>.onrender.com/api/drives/callback
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      # https://<your-service>.onrender.com (no trailing slash)
+      - key: CLIENT_URL
+        sync: false

@@ -26,8 +26,8 @@ Unified Google Drive viewer — connect multiple Google Drive accounts and brows
 
 ### Prerequisites
 
-- Node.js 18+
-- MongoDB (only needed for the optional sync feature)
+- Node.js 20.19+ (Vite 8 requirement; 22 recommended)
+- MongoDB — every `/api` route returns 503 without it, including connecting a drive
 
 ### 1. Clone & install
 
@@ -79,7 +79,42 @@ PORT=5000
 npm run dev
 ```
 
-Opens at **http://localhost:27017**
+Opens at **http://localhost:5173**
+
+---
+
+## Deploy for free
+
+One free [Render](https://render.com) web service runs the API and serves the built client from the same URL, backed by a free [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) cluster. `render.yaml` in the repo root describes the service.
+
+1. **Database — MongoDB Atlas (M0, free)**
+   - Create a free M0 cluster and a database user.
+   - Network Access → add `0.0.0.0/0` (Render's free tier has no fixed outbound IP).
+   - Copy the connection string, e.g. `mongodb+srv://user:pass@cluster0.xxxxx.mongodb.net/alldrive`.
+2. **App — Render**
+   - Push this repo to GitHub, then in Render: **New → Blueprint** → select the repo.
+   - Render reads `render.yaml` and asks for the secret values. Use your service URL (shown as `https://<name>.onrender.com`; if you don't know it yet, enter placeholders and fix them after the first deploy):
+
+     | Variable | Value |
+     |---|---|
+     | `MONGODB_URI` | the Atlas connection string |
+     | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | from Google Cloud Console |
+     | `CLIENT_URL` | `https://<name>.onrender.com` (no trailing slash) |
+     | `GOOGLE_REDIRECT_URI` | `https://<name>.onrender.com/api/drives/callback` |
+
+     `JWT_SECRET` is generated automatically; `PORT` is set by Render.
+3. **Google Cloud Console** → your OAuth client → add the production URLs next to the localhost ones:
+   - Authorized JavaScript origins: `https://<name>.onrender.com`
+   - Authorized redirect URIs: `https://<name>.onrender.com/callback` and `https://<name>.onrender.com/api/drives/callback`
+4. Open `https://<name>.onrender.com` and connect a drive.
+
+Every push to the default branch redeploys automatically.
+
+**Free-tier limits to know about**
+
+- The Render service sleeps after ~15 minutes without traffic; the next visit takes up to a minute to wake it.
+- While the Google OAuth consent screen is in **Testing**, only the Google accounts listed as test users can sign in (up to 100), and their refresh tokens expire after 7 days. Publishing the app for everyone requires Google's verification because the Drive and Photos scopes are sensitive.
+- Atlas M0 gives 512 MB, which is plenty: only account and drive metadata is stored, never files.
 
 ---
 
