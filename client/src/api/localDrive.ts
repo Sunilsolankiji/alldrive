@@ -1,6 +1,7 @@
-﻿import axios from 'axios'
+import axios from 'axios'
 import api from './axios'
 import type { DriveFile, LocalDriveAccount } from '../types'
+import { fetchOriginal } from './googlePhotos'
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3'
 const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3'
@@ -12,17 +13,19 @@ export const getValidToken = (drive: LocalDriveAccount): string => drive.accessT
 export const isTokenExpired = (drive: LocalDriveAccount, now = Date.now()) =>
   !(now < drive.tokenExpiry - 60_000) // also true for a missing/invalid expiry
 
-/** Redirects to Google sign-in. Pass the account email to reconnect it without the consent screen. */
-export const startGoogleConnect = async (loginHint?: string) => {
+/** Redirects to Google sign-in. Pass the account email to reconnect it without the consent screen,
+ *  or `consent` to show it anyway (needed to grant a newly added permission). */
+export const startGoogleConnect = async (loginHint?: string, consent = false) => {
   const res = await api.get<{ url: string }>('/drives/local-connect-url', {
-    params: loginHint ? { login_hint: loginHint } : {},
+    params: { ...(loginHint ? { login_hint: loginHint } : {}), ...(consent ? { consent: 1 } : {}) },
   })
   window.location.href = res.data.url
 }
 
 const FILE_FIELDS =
-  'id,name,mimeType,size,modifiedTime,createdTime,thumbnailLink,webViewLink,iconLink,' +
-  'imageMediaMetadata(width,height,rotation),videoMediaMetadata(width,height,durationMillis)'
+  'id,name,mimeType,size,modifiedTime,createdTime,thumbnailLink,webViewLink,iconLink,description,' +
+  'imageMediaMetadata(width,height,rotation,time,cameraMake,cameraModel,aperture,exposureTime,focalLength,isoSpeed,lens,flashUsed,location),' +
+  'videoMediaMetadata(width,height,durationMillis)'
 
 export const listFiles = async (
   drive: LocalDriveAccount,
@@ -100,11 +103,59 @@ export const getFileUrl = async (drive: LocalDriveAccount, fileId: string): Prom
 }
 
 /** Saves the original file to the device straight from Drive. */
-export const downloadFile = async (drive: LocalDriveAccount, file: { id: string; name: string }) => {
-  const url = await getFileUrl(drive, file.id)
+export const downloadFile = async (drive: LocalDriveAccount, file: DriveFile) => {
+  const url = file.baseUrl ? await fetchOriginal(drive, file) : await getFileUrl(drive, file.id)
   const a = document.createElement('a')
   a.href = url
   a.download = file.name
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}
+
+/** First `bytes` of a file (HTTP Range), for reading embedded metadata without downloading it all. */
+export const getFileHead = async (drive: LocalDriveAccount, fileId: string, bytes = 256 * 1024): Promise<ArrayBuffer> => {
+  const res = await axios.get<ArrayBuffer>(`${DRIVE_API}/files/${fileId}`, {
+    headers: { Authorization: 'Bearer ' + getValidToken(drive), Range: `bytes=0-${bytes - 1}` },
+    params: { alt: 'media' },
+    responseType: 'arraybuffer',
+  })
+  return res.data
+}
+
+const PHOTOS_API = 'https://photoslibrary.googleapis.com/v1'
+
+/** Google Photos only accepts photos and videos; everything else stays on Drive. */
+export const isPhotosMedia = (file: File) => /^(image|video)\//.test(file.type)
+
+/** Whether the token may upload to Google Photos (users can untick it on the consent screen). Asks Google, not the stored copy. */
+export const hasPhotosScope = async (drive: LocalDriveAccount) => {
+  const { data } = await axios.post<{ scope?: string }>(
+    'https://oauth2.googleapis.com/tokeninfo',
+    new URLSearchParams({ access_token: getValidToken(drive) })
+  )
+  return !!data.scope?.includes('photoslibrary.appendonly')
+}
+
+/** Uploads a photo/video into the account's Google Photos library (raw upload + batchCreate). */
+export const uploadToPhotos = async (drive: LocalDriveAccount, file: File, onProgress?: (pct: number) => void): Promise<void> => {
+  const auth = 'Bearer ' + getValidToken(drive)
+  const { data: uploadToken } = await axios.post<string>(`${PHOTOS_API}/uploads`, file, {
+    headers: {
+      Authorization: auth,
+      'Content-Type': 'application/octet-stream',
+      'X-Goog-Upload-Content-Type': file.type,
+      'X-Goog-Upload-Protocol': 'raw',
+    },
+    responseType: 'text',
+    onUploadProgress: (e) => {
+      if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100))
+    },
+  })
+  const { data } = await axios.post<{ newMediaItemResults?: { status?: { code?: number; message?: string } }[] }>(
+    `${PHOTOS_API}/mediaItems:batchCreate`,
+    { newMediaItems: [{ simpleMediaItem: { uploadToken, fileName: file.name } }] },
+    { headers: { Authorization: auth } }
+  )
+  const status = data.newMediaItemResults?.[0]?.status
+  if (status?.code) throw new Error(status.message || 'Google Photos rejected the file')
 }

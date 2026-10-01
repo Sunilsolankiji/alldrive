@@ -1,6 +1,6 @@
 // Run: node --experimental-strip-types client/src/utils/photoLayout.check.ts
 import assert from 'node:assert/strict'
-import { justify } from './photoLayout.ts'
+import { formatExposure, justify } from './photoLayout.ts'
 
 const width = 1000
 const gap = 4
@@ -23,3 +23,9 @@ assert.deepEqual(justify([10], 500, 200, 4), [{ start: 0, end: 1, height: 50 }])
 assert.deepEqual(justify([1, 1], 0, 200, 4), [])
 
 console.log('photoLayout: ok')
+
+assert.equal(formatExposure(1 / 120), '1/120')
+assert.equal(formatExposure(0.008), '1/125')
+assert.equal(formatExposure(2), '2s')
+assert.equal(formatExposure(0), '')
+console.log('photo info formatting: ok')

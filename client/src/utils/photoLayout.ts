@@ -61,3 +61,9 @@ export function justify(ratios: number[], width: number, target: number, gap: nu
   if (start < ratios.length) rows.push({ start, end: ratios.length, height: target })
   return rows
 }
+
+/** Shutter speed the way cameras print it: 0.008 ? "1/125", 2 ? "2s". */
+export const formatExposure = (seconds?: number) => {
+  if (!seconds || seconds <= 0) return ''
+  return seconds >= 1 ? `${+seconds.toFixed(1)}s` : `1/${Math.round(1 / seconds)}`
+}

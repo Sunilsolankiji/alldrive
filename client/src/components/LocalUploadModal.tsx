@@ -16,22 +16,39 @@ const LocalUploadModal = ({ drives, onClose, onUploaded }: Props) => {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [needsReconnect, setNeedsReconnect] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const askReconnect = () => {
+    setNeedsReconnect(true)
+    setError('This account hasn’t allowed uploads to Google Photos yet. Reconnect it and tick the Google Photos permission.')
+  }
 
   const handleUpload = async () => {
     if (!files.length || !selectedId) return
     const drive = drives.find((d) => d.id === selectedId)
     if (!drive) return
+    if (files.some(localDriveApi.isPhotosMedia) && !(await localDriveApi.hasPhotosScope(drive).catch(() => false))) return askReconnect()
     setUploading(true)
     setError('')
     try {
       for (const file of files) {
-        await localDriveApi.uploadFile(drive, file, setProgress)
+        if (localDriveApi.isPhotosMedia(file)) await localDriveApi.uploadToPhotos(drive, file, setProgress)
+        else await localDriveApi.uploadFile(drive, file, setProgress)
       }
       onUploaded()
       onClose()
-    } catch {
-      setError('Upload failed. Please try again.')
+    } catch (err) {
+      const res = (err as { response?: { status?: number; data?: unknown } }).response
+      // Drive/batchCreate errors are {error:{message}}; the raw Photos upload endpoint returns text like {"code":16,"message":...}
+      let data = res?.data
+      if (typeof data === 'string') try { data = JSON.parse(data) } catch { /* plain text */ }
+      const d = data as { error?: { message?: string }; message?: string } | string | undefined
+      const message = typeof d === 'object' ? d.error?.message ?? d.message : d || undefined
+      if (/not activated|has not been used|is disabled/i.test(message ?? ''))
+        setError('The Google Photos Library API is not enabled for this app. Enable it in Google Cloud Console (APIs & Services → Library), wait a minute, then try again.')
+      else if (res?.status === 401 || (res?.status === 403 && /scope/i.test(message ?? ''))) askReconnect()
+      else setError(`Upload failed: ${message ?? (err as Error).message ?? 'please try again.'}`)
     } finally {
       setUploading(false)
       setProgress(0)
@@ -50,7 +67,7 @@ const LocalUploadModal = ({ drives, onClose, onUploaded }: Props) => {
             <label className="block text-sm font-medium text-gray-700 mb-1">Upload to</label>
             <select
               value={selectedId}
-              onChange={(e) => setSelectedId(e.target.value)}
+              onChange={(e) => { setSelectedId(e.target.value); setError(''); setNeedsReconnect(false) }}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {drives.map((d) => (
@@ -72,6 +89,7 @@ const LocalUploadModal = ({ drives, onClose, onUploaded }: Props) => {
             <p className="text-sm text-gray-600">
               {files.length > 0 ? `${files.length} file${files.length > 1 ? 's' : ''} selected` : 'Drag and drop files here, or click to browse'}
             </p>
+            <p className="mt-1 text-xs text-gray-500">Photos &amp; videos go to Google Photos; other files go to Google Drive.</p>
           </div>
           {uploading && (
             <div>
@@ -83,7 +101,20 @@ const LocalUploadModal = ({ drives, onClose, onUploaded }: Props) => {
               </div>
             </div>
           )}
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && (
+            <div className="text-sm text-red-600">
+              <p>{error}</p>
+              {needsReconnect && (
+                <button
+                  type="button"
+                  onClick={() => localDriveApi.startGoogleConnect(drives.find((d) => d.id === selectedId)?.accountEmail, true)}
+                  className="mt-2 rounded-lg bg-red-600 px-3 py-1.5 font-medium text-white hover:bg-red-700"
+                >
+                  Reconnect {username(drives.find((d) => d.id === selectedId)?.accountEmail ?? '')}
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex gap-3 p-6 pt-0">
           <button onClick={onClose} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>

@@ -10,8 +10,10 @@ import FilesView from '../components/FilesView'
 import Navbar from '../components/Navbar'
 import LocalUploadModal from '../components/LocalUploadModal'
 import PhotosView from '../components/PhotosView'
+import PhotoViewer from '../components/PhotoViewer'
 import { fileKey } from '../hooks/usePagedDriveFiles'
 import type { DriveAccount, DriveFile, LocalDriveAccount } from '../types'
+import { isVideo } from '../utils/photoLayout'
 import { username } from '../utils/username'
 
 const toDisplayDrive = (d: LocalDriveAccount): DriveAccount => ({
@@ -32,6 +34,8 @@ const TYPE_FILTERS: Record<Tab, TypeFilters> = {
   },
   files: {
     Folders: (m) => m === FOLDER_MIME,
+    Photos: (m) => m.startsWith('image/'),
+    Videos: (m) => m.startsWith('video/'),
     Audio: (m) => m.startsWith('audio/'),
     PDFs: (m) => m === 'application/pdf',
     Documents: (m) => m.includes('document') || m.includes('word') || m.startsWith('text/'),
@@ -52,7 +56,7 @@ const PhotosIcon = () => (
 
 const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
   { id: 'photos', label: 'Photos', icon: <PhotosIcon /> },
-  { id: 'files', label: 'Files', icon: <span aria-hidden="true">📂</span> },
+  { id: 'files', label: 'Drive', icon: <span aria-hidden="true">📂</span> },
 ]
 
 const LocalDashboard = () => {
@@ -67,6 +71,8 @@ const LocalDashboard = () => {
   const [showUpload, setShowUpload] = useState(false)
   const [previewFile, setPreviewFile] = useState<DriveFile | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [driveViewerFiles, setDriveViewerFiles] = useState<DriveFile[]>([])
+  const [driveViewerIndex, setDriveViewerIndex] = useState(-1)
 
   const displayDrives = useMemo(() => drives.map(toDisplayDrive), [drives])
 
@@ -145,7 +151,13 @@ const LocalDashboard = () => {
 
   const previewRequest = useRef(0)
 
-  const handlePreview = async (file: DriveFile) => {
+  const handlePreview = async (file: DriveFile, mediaFiles: DriveFile[]) => {
+    if (file.mimeType.startsWith('image/') || isVideo(file)) {
+      setDriveViewerFiles(mediaFiles)
+      setDriveViewerIndex(mediaFiles.findIndex((f) => fileKey(f) === fileKey(file)))
+      return
+    }
+
     const drive = drives.find((d) => d.id === file.driveAccountId)
     if (!drive) return
     const id = ++previewRequest.current
@@ -177,6 +189,24 @@ const LocalDashboard = () => {
     setPreviewUrl(null)
   }
 
+  const closeDriveViewer = () => {
+    setDriveViewerFiles([])
+    setDriveViewerIndex(-1)
+  }
+
+  const deleteDriveViewerFile = async (file: DriveFile) => {
+    if (!await handleDelete(file)) return
+    setDriveViewerFiles((prev) => {
+      const next = prev.filter((f) => fileKey(f) !== fileKey(file))
+      if (!next.length) {
+        setDriveViewerIndex(-1)
+        return next
+      }
+      setDriveViewerIndex((index) => Math.min(index, next.length - 1))
+      return next
+    })
+  }
+
   const typeFilter = (t: Tab) => (type[t] ? TYPE_FILTERS[t][type[t]] : undefined)
 
   return (
@@ -205,7 +235,7 @@ const LocalDashboard = () => {
               <input
                 type="text"
                 aria-label={`Search ${tab}`}
-                placeholder={tab === 'photos' ? 'Search photos...' : 'Search files...'}
+                placeholder={tab === 'photos' ? 'Search photos...' : 'Search Drive...'}
                 value={search[tab]}
                 onChange={(e) => setSearch({ ...search, [tab]: e.target.value })}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-60"
@@ -307,6 +337,22 @@ const LocalDashboard = () => {
           onDelete={async (f) => {
             if (await handleDelete(f)) closePreview()
           }}
+        />
+      )}
+      {driveViewerIndex >= 0 && driveViewerFiles.length > 0 && (
+        <PhotoViewer
+          files={driveViewerFiles}
+          index={Math.min(driveViewerIndex, driveViewerFiles.length - 1)}
+          onIndex={setDriveViewerIndex}
+          onClose={closeDriveViewer}
+          hasMore={false}
+          loadMore={() => {}}
+          driveOf={(file) => drives.find((drive) => drive.id === file.driveAccountId)}
+          onDownload={(file) => {
+            const drive = drives.find((d) => d.id === file.driveAccountId)
+            if (drive) void localDriveApi.downloadFile(drive, file)
+          }}
+          onDelete={(file) => void deleteDriveViewerFile(file)}
         />
       )}
       {confirmTrash && (

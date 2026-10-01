@@ -1,7 +1,7 @@
 import type { Response } from 'express'
 import type { AuthRequest } from '../middleware/jwtAuth'
 import DriveAccount from '../models/DriveAccount'
-import { deleteFile, downloadFile, listFiles, streamFile, uploadFile } from '../services/googleDrive'
+import { deleteFile, downloadFile, listFiles, streamFile, streamPhotosFile, uploadFile } from '../services/googleDrive'
 
 export const getAllFiles = async (req: AuthRequest, res: Response): Promise<void> => {
   const { driveId, mimeType, pageSize } = req.query as Record<string, string | undefined>
@@ -63,6 +63,21 @@ export const preview = async (req: AuthRequest, res: Response): Promise<void> =>
     return
   }
   await streamFile(drive, fileId, res)
+}
+
+export const photosPreview = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { driveId } = req.params as { driveId: string }
+  const url = typeof req.query.url === 'string' ? req.query.url : ''
+  const drive = await DriveAccount.findOne({ _id: driveId, userId: req.user!._id })
+  if (!drive) {
+    res.status(404).json({ message: 'Drive account not found' })
+    return
+  }
+  if (!url) {
+    res.status(400).json({ message: 'Photos URL is required' })
+    return
+  }
+  await streamPhotosFile(drive, url, res)
 }
 
 export const download = async (req: AuthRequest, res: Response): Promise<void> => {

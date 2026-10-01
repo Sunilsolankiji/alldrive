@@ -37,6 +37,7 @@ export const localConnectUrl = (req: Request, res: ExpressResponse): void => {
   // Reconnect: target the known account and skip consent so Google can redirect straight back
   if (loginHint) params.set('login_hint', loginHint)
   else params.set('prompt', 'consent select_account')
+  if (loginHint && req.query.consent) params.set('prompt', 'consent')
 
   res.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` })
 }

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import * as googlePhotos from '../api/googlePhotos'
 import * as localDriveApi from '../api/localDrive'
 import { fileKey } from '../hooks/usePagedDriveFiles'
 import type { DriveFile, LocalDriveAccount } from '../types'
-import { formatSize, isVideo, takenAt } from '../utils/photoLayout'
-import { username } from '../utils/username'
+import { isVideo } from '../utils/photoLayout'
+import MediaImg from './MediaImg'
+import PhotoInfo from './PhotoInfo'
 
 // Material Design icon paths (Apache 2.0)
 export const ICONS = {
@@ -41,16 +43,21 @@ interface Props {
 
 const viewportPx = () =>
   Math.min(4096, Math.round(Math.max(window.innerWidth, window.innerHeight) * devicePixelRatio))
-const thumb = (f: DriveFile, size: string) => (f.thumbnailLink ? localDriveApi.sizedThumbnail(f.thumbnailLink, size) : '')
+const thumb = (f: DriveFile, size: string) =>
+  f.baseUrl ? googlePhotos.sizedBaseUrl(f.baseUrl, size) : f.thumbnailLink ? localDriveApi.sizedThumbnail(f.thumbnailLink, size) : ''
 
 /** Warms the browser cache with the viewer-size image, so opening/sliding to it shows full resolution at once. */
-export const preloadFull = (f?: DriveFile) => {
+export const preloadFull = (f?: DriveFile, drive?: LocalDriveAccount) => {
   if (!f || needsOriginal(f)) return
+  if (f.photosAuth) {
+    if (drive) googlePhotos.authedBlobUrl(thumb(f, `s${viewportPx()}`), drive).catch(() => {})
+    return
+  }
   const img = new Image()
   img.referrerPolicy = 'no-referrer' // must match the <img>, or Google's CDN may refuse and nothing gets cached
   img.src = thumb(f, `s${viewportPx()}`)
 }
-const needsOriginal = (f: DriveFile) => isVideo(f) || !f.thumbnailLink
+const needsOriginal = (f: DriveFile) => isVideo(f) || !(f.thumbnailLink || f.baseUrl)
 
 const barButton = 'rounded-full p-2.5 text-white/90 hover:bg-white/10 hover:text-white disabled:opacity-40'
 const ZOOM = 2.5
@@ -114,17 +121,32 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
     originalsRef.current = originals
     driveOfRef.current = driveOf
   })
-  useEffect(() => () => Object.values(originalsRef.current).forEach((u) => URL.revokeObjectURL(u)), [])
+  useEffect(
+    () => () =>
+      Object.values(originalsRef.current)
+        .filter((u) => u.startsWith('blob:'))
+        .forEach((u) => URL.revokeObjectURL(u)),
+    []
+  )
   useEffect(() => {
     if (!file || !needsOriginal(file)) return
     const k = fileKey(file)
     const drive = driveOfRef.current(file)
     if (originalsRef.current[k] || !drive) return
+    if (file.baseUrl && !file.photosAuth) {
+      setOriginals((o) => ({ ...o, [k]: googlePhotos.originalUrl(file) }))
+      return
+    }
     let cancelled = false
-    localDriveApi
-      .getFileUrl(drive, file.id)
+    ;(file.baseUrl ? googlePhotos.fetchOriginal(drive, file) : localDriveApi.getFileUrl(drive, file.id))
       .then((url) => (cancelled ? URL.revokeObjectURL(url) : setOriginals((o) => ({ ...o, [k]: url }))))
-      .catch(() => {}) // keep the poster/placeholder
+      .catch(() => {
+        if (!cancelled && file.baseUrl) {
+          // Google may reject the authenticated XHR after redirecting the media URL.
+          // Native video loading can still consume the expiring URL directly.
+          setOriginals((o) => ({ ...o, [k]: googlePhotos.originalUrl(file) }))
+        }
+      })
     return () => {
       cancelled = true
     }
@@ -148,8 +170,8 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
 
   // Warm the cache for the neighbours so arrowing through is instant.
   useEffect(() => {
-    preloadFull(files[index - 1])
-    preloadFull(files[index + 1])
+    const f = files[index]
+    if (f) [files[index - 1], files[index + 1]].forEach((n) => preloadFull(n, driveOfRef.current(n ?? f)))
   }, [files, index])
 
   useEffect(() => {
@@ -169,7 +191,7 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
         else onClose()
       } else if (e.key === 'ArrowLeft') go(-1)
       else if (e.key === 'ArrowRight') go(1)
-      else if (e.key === 'Delete' && file) {
+      else if (e.key === 'Delete' && file && !file.baseUrl) {
         setZoom(null)
         onDelete(file)
       } else if (e.key === 'i') setShowInfo((s) => !s)
@@ -187,7 +209,9 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
   const original = originals[fileKey(file)]
   const preview = thumb(file, 'h440') // already cached by the grid, so the viewer opens instantly
   const full = original ?? thumb(file, `s${px}`)
-  const m = file.imageMediaMetadata ?? file.videoMediaMetadata
+  // Picker bytes are documented as needing the auth header; Library and Drive URLs don't
+  const authOf = (f: DriveFile) => (f.photosAuth ? driveOf(f) : undefined)
+  const canDelete = !file.baseUrl // the Google Photos API can't delete
 
   const pokeChrome = () => {
     setChromeVisible(true)
@@ -261,8 +285,8 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
             (f, i) =>
               f && (
                 <div key={fileKey(f)} className={`absolute inset-y-0 w-full ${i ? 'left-full' : '-left-full'}`}>
-                  {f.thumbnailLink && (
-                    <img src={thumb(f, `s${px}`)} alt="" referrerPolicy="no-referrer" draggable={false} className="h-full w-full object-contain" />
+                  {thumb(f, 's1') && (
+                    <MediaImg authDrive={authOf(f)} src={thumb(f, `s${px}`)} alt="" referrerPolicy="no-referrer" draggable={false} className="h-full w-full object-contain" />
                   )}
                 </div>
               )
@@ -270,10 +294,10 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
         {isVideo(file) ? (
           <div className="absolute inset-0 flex items-center justify-center">
             {original ? (
-              <video key={original} src={original} poster={preview || undefined} controls autoPlay playsInline className="max-h-full max-w-full" />
+              <video key={original} src={original} poster={(!file.baseUrl && preview) || undefined} controls autoPlay playsInline className="max-h-full max-w-full" />
             ) : (
               <>
-                {preview && <img src={preview} alt="" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-contain opacity-60" />}
+                {preview && <MediaImg authDrive={authOf(file)} src={preview} alt="" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-contain opacity-60" />}
                 <span className="relative h-10 w-10 animate-spin rounded-full border-4 border-white/30 border-t-white" aria-label="Loading video" />
               </>
             )}
@@ -313,11 +337,12 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
               }
             >
               {preview && loadedSrc !== full && (
-                <img src={preview} alt="" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-contain" />
+                <MediaImg authDrive={authOf(file)} src={preview} alt="" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-contain" />
               )}
               {full ? (
-                <img
+                <MediaImg
                   key={full}
+                  authDrive={original ? undefined : authOf(file)}
                   // Already cached (preloaded neighbour/hover): show it in this same frame, no low-res stage.
                   ref={(el) => {
                     if (el?.complete && el.naturalWidth && loadedSrc !== full) setLoadedSrc(full)
@@ -368,13 +393,15 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
               <Icon path={ICONS.download} />
             </button>
             {file.webViewLink && (
-              <a href={file.webViewLink} target="_blank" rel="noreferrer" className={barButton} aria-label="Open in Google Drive" title="Open in Google Drive">
+              <a href={file.webViewLink} target="_blank" rel="noreferrer" className={barButton} aria-label={file.baseUrl ? 'Open in Google Photos' : 'Open in Google Drive'} title={file.baseUrl ? 'Open in Google Photos' : 'Open in Google Drive'}>
                 <Icon path={ICONS.openInDrive} />
               </a>
             )}
-            <button type="button" onClick={() => { setZoom(null); onDelete(file) }} className={barButton} aria-label="Move to trash" title="Move to trash (Delete)">
-              <Icon path={ICONS.trash} />
-            </button>
+            {canDelete && (
+              <button type="button" onClick={() => { setZoom(null); onDelete(file) }} className={barButton} aria-label="Move to trash" title="Move to trash (Delete)">
+                <Icon path={ICONS.trash} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -386,38 +413,15 @@ const PhotoViewer = ({ files, index, onIndex, onClose, hasMore, loadMore, driveO
         </button>
       </div>
 
-      {showInfo && (
-        <aside className="w-80 shrink-0 overflow-y-auto bg-white p-5 text-gray-800 max-sm:absolute max-sm:inset-x-0 max-sm:bottom-0 max-sm:max-h-[50%] max-sm:w-full max-sm:rounded-t-2xl">
-          <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-lg font-medium">Info</h2>
-            <button type="button" onClick={() => setShowInfo(false)} className="rounded-full p-2 hover:bg-gray-100" aria-label="Close info">
-              <Icon path={ICONS.close} />
-            </button>
-          </div>
-          <dl className="space-y-4 text-sm">
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-gray-500">Name</dt>
-              <dd className="break-words">{file.name}</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-gray-500">Added</dt>
-              <dd>{new Date(takenAt(file)).toLocaleString()}</dd>
-            </div>
-            {(m?.width || file.size) && (
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-gray-500">Details</dt>
-                <dd>{[m?.width && m?.height ? `${m.width} × ${m.height}` : '', formatSize(file.size), file.mimeType].filter(Boolean).join(' · ')}</dd>
-              </div>
-            )}
-            {file.driveEmail && (
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-gray-500">Account</dt>
-                <dd className="break-all" title={file.driveEmail}>{username(file.driveEmail)}</dd>
-              </div>
-            )}
-          </dl>
-        </aside>
-      )}
+      {/* Always mounted so it can slide out as well as in; desktop: width pushes the photo aside, mobile: bottom sheet. */}
+      <div
+        inert={!showInfo}
+        className={`shrink-0 overflow-hidden bg-white transition-[width,transform] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none max-sm:absolute max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-10 max-sm:h-[60%] max-sm:rounded-t-2xl ${
+          showInfo ? 'sm:w-[360px]' : 'sm:w-0 max-sm:translate-y-full'
+        }`}
+      >
+        <PhotoInfo file={file} drive={driveOf(file)} open={showInfo} onClose={() => setShowInfo(false)} />
+      </div>
     </div>
   )
 }

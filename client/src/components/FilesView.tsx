@@ -11,11 +11,10 @@ interface Props {
   typeFilter?: (mimeType: string) => boolean
   hidden: Set<string>
   reloadKey: number
-  onPreview: (file: DriveFile) => void
+  onPreview: (file: DriveFile, mediaFiles: DriveFile[]) => void
   onDelete: (file: DriveFile) => void
 }
 
-const MEDIA = /^(image|video)\//
 const isFolder = (f: DriveFile) => f.mimeType === FOLDER_MIME
 const foldersFirst = (a: DriveFile, b: DriveFile) =>
   Number(isFolder(b)) - Number(isFolder(a)) || a.name.localeCompare(b.name)
@@ -29,7 +28,6 @@ const FilesView = ({ drives, search, typeFilter, hidden, reloadKey, onPreview, o
     () => (currentFolder ? drives.filter((d) => d.id === currentFolder.driveAccountId) : drives),
     [drives, currentFolder]
   )
-  // Photos/videos are filtered client-side: Drive rejects some `not mimeType contains` queries
   const q = `'${currentFolder?.id ?? 'root'}' in parents`
   const { files, loading, error, hasMore, loadMore } = usePagedDriveFiles(
     targetDrives, q, 'folder,name', foldersFirst, reloadKey
@@ -38,11 +36,12 @@ const FilesView = ({ drives, search, typeFilter, hidden, reloadKey, onPreview, o
   const query = search.trim().toLowerCase()
   const visible = files.filter(
     (f) =>
-      !MEDIA.test(f.mimeType) &&
       !hidden.has(fileKey(f)) &&
       (!query || f.name.toLowerCase().includes(query)) &&
       (!typeFilter || typeFilter(f.mimeType))
   )
+  const mediaFiles = visible.filter((f) => f.mimeType.startsWith('image/') || f.mimeType.startsWith('video/'))
+  const handlePreview = (file: DriveFile) => onPreview(file, mediaFiles)
 
   return (
     <div>
@@ -73,7 +72,7 @@ const FilesView = ({ drives, search, typeFilter, hidden, reloadKey, onPreview, o
           {visible.length > 0 && (
             <FileGrid
               files={visible}
-              onPreview={onPreview}
+              onPreview={handlePreview}
               onDelete={onDelete}
               onOpenFolder={(f) => setFolderPath((p) => [...p, f])}
             />

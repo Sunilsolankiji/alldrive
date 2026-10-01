@@ -1,4 +1,5 @@
 import { google } from 'googleapis'
+import axios from 'axios'
 import { Readable } from 'stream'
 import type { Response } from 'express'
 import { createOAuth2Client } from '../config/googleOAuth'
@@ -88,6 +89,30 @@ export const streamFile = async (driveAccount: IDriveAccount, fileId: string, re
 
   const fileStream = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'stream' })
   fileStream.data.pipe(res)
+}
+
+export const streamPhotosFile = async (driveAccount: IDriveAccount, url: string, res: Response) => {
+  const parsed = new URL(url)
+  if (!['lh3.googleusercontent.com', 'lh4.googleusercontent.com', 'video-downloads.googleusercontent.com'].includes(parsed.hostname)) {
+    throw new Error('Invalid Google Photos media URL')
+  }
+
+  const auth = await getAuthClient(driveAccount)
+  const response = await axios.get(url, {
+    headers: {
+      Authorization: `Bearer ${auth.credentials.access_token}`,
+      ...(res.req.headers.range ? { Range: res.req.headers.range } : {}),
+    },
+    responseType: 'stream',
+    validateStatus: (status) => status >= 200 && status < 400,
+  })
+
+  res.status(response.status)
+  for (const header of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
+    const value = response.headers[header]
+    if (value) res.setHeader(header, value)
+  }
+  response.data.pipe(res)
 }
 
 export const downloadFile = async (driveAccount: IDriveAccount, fileId: string, res: Response) => {
